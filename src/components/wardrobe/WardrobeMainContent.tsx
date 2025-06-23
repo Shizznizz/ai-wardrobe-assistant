@@ -3,7 +3,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { ClothingItem } from '@/lib/types';
 import WardrobeGrid from '@/components/WardrobeGrid';
-import WardrobeGaps from '@/components/wardrobe/WardrobeGaps';
+import EnhancedWardrobeGaps from '@/components/wardrobe/EnhancedWardrobeGaps';
 import WardrobeAddMore from '@/components/wardrobe/WardrobeAddMore';
 import OliviaSuggests from '@/components/wardrobe/OliviaSuggests';
 
@@ -57,8 +57,13 @@ const WardrobeMainContent = ({
           compactView={showCompactView}
         />
         
-        {/* Wardrobe Gaps Section - Only shows if relevant */}
-        <WardrobeGaps items={allItems} />
+        {/* Enhanced Wardrobe Gaps Section - Only shows if relevant and user has items */}
+        {isAuthenticated && !isLoadingItems && allItems.length > 0 && (
+          <EnhancedWardrobeGaps 
+            items={allItems} 
+            onAddItem={onUpload}
+          />
+        )}
         
         {/* Add More section at bottom of grid */}
         <WardrobeAddMore 
