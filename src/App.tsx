@@ -25,6 +25,7 @@ import { LocationProvider } from '@/hooks/useLocationStorage';
 import { AuthProvider } from '@/hooks/useAuth';
 import { UserDataProvider } from '@/hooks/useUserData';
 import PageLayout from '@/components/shared/PageLayout';
+import ScrollToTop from '@/components/ScrollToTop';
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
         <LocationProvider>
           <OutfitProvider>
             <Router>
+              <ScrollToTop />
               <Routes>
                 {/* Apply PageLayout to Home page as well */}
                 <Route path="/" element={<PageLayout><Home /></PageLayout>} />
