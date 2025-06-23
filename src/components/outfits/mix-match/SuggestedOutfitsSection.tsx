@@ -40,11 +40,11 @@ const SuggestedOutfitsSection = ({ outfits, clothingItems, weather, isLoading }:
 
   // Filter outfits to only show those with valid items
   const validOutfits = outfits.filter(outfit => {
-    if (!outfit.items || outfit.items.length === 0) return false;
+    if (!outfit || !Array.isArray(outfit.items) || outfit.items.length === 0) return false;
     
     // Check if at least one item from the outfit exists in the user's wardrobe
     const validItemCount = outfit.items.filter(itemId => 
-      clothingItems.some(item => item.id === itemId)
+      clothingItems.some(item => item && item.id === itemId)
     ).length;
     
     // Only show outfit if at least one item exists
