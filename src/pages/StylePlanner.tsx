@@ -5,7 +5,7 @@ import { format } from 'date-fns';
 import EnhancedHeroSection from '@/components/shared/EnhancedHeroSection';
 import OutfitCalendar from '@/components/outfits/OutfitCalendar';
 import WeeklyOutfitPlanner from '@/components/style-planner/WeeklyOutfitPlanner';
-import { useOutfitState } from '@/hooks/useOutfitState';
+import { useOutfitContext } from '@/hooks/useOutfitContext';
 import { useLocationStorage } from '@/hooks/useLocationStorage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart3, CalendarIcon, CalendarDays, Clock, Users, Sparkles, Activity, PieChart } from 'lucide-react';
@@ -16,7 +16,7 @@ import CollapsibleOliviaSection from '@/components/outfits/CollapsibleOliviaSect
 import MissedOpportunitiesSection from '@/components/outfits/calendar/MissedOpportunitiesSection';
 
 const StylePlanner = () => {
-  const { outfits, clothingItems, outfitLogs, addOutfitLog } = useOutfitState();
+  const { outfits, clothingItems, outfitLogs, addOutfitLog, loading } = useOutfitContext();
   const { savedLocation } = useLocationStorage();
   const [showTimeline, setShowTimeline] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -65,6 +65,7 @@ const StylePlanner = () => {
             clothingItems={clothingItems}
             outfitLogs={outfitLogs}
             onAddLog={addOutfitLog}
+            loading={loading}
           />
         </motion.div>
       </section>

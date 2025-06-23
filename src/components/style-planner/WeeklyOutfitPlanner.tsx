@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Sparkles, RefreshCw, Calendar } from 'lucide-react';
+import { Sparkles, RefreshCw, Calendar, Loader2 } from 'lucide-react';
 import OutfitPreviewCard from './OutfitPreviewCard';
 import { Outfit, ClothingItem } from '@/lib/types';
 import { OutfitLog } from '@/components/outfits/OutfitLogItem';
@@ -17,13 +17,15 @@ interface WeeklyOutfitPlannerProps {
   clothingItems: ClothingItem[];
   outfitLogs: OutfitLog[];
   onAddLog: (log: Omit<OutfitLog, 'id'>) => void;
+  loading?: boolean;
 }
 
 const WeeklyOutfitPlanner = ({
   outfits,
   clothingItems,
   outfitLogs,
-  onAddLog
+  onAddLog,
+  loading = false
 }: WeeklyOutfitPlannerProps) => {
   const { user } = useAuth();
   const [isGenerating, setIsGenerating] = useState(false);
@@ -38,8 +40,10 @@ const WeeklyOutfitPlanner = ({
 
   // Load existing outfit logs for the week
   useEffect(() => {
-    loadWeeklyPlan();
-  }, [outfitLogs, outfits]);
+    if (!loading && outfits.length > 0) {
+      loadWeeklyPlan();
+    }
+  }, [outfitLogs, outfits, loading]);
 
   const loadWeeklyPlan = () => {
     const plan: Record<string, { outfit?: Outfit; tip?: string }> = {};
@@ -89,8 +93,18 @@ const WeeklyOutfitPlanner = ({
   };
 
   const autoplanWeek = async () => {
-    if (!user || outfits.length < 7) {
-      toast.error('You need at least 7 outfits in your wardrobe to auto-plan a week');
+    if (!user) {
+      toast.error('You need to be logged in to auto-plan your week');
+      return;
+    }
+
+    if (loading) {
+      toast.error('Please wait for your outfits to load before auto-planning');
+      return;
+    }
+
+    if (outfits.length < 7) {
+      toast.error(`You need at least 7 outfits to auto-plan a week. You currently have ${outfits.length} outfit${outfits.length !== 1 ? 's' : ''}.`);
       return;
     }
 
@@ -187,6 +201,19 @@ const WeeklyOutfitPlanner = ({
     toast.info('Outfit selector coming soon! Use the Auto Plan feature for now.');
   };
 
+  if (loading) {
+    return (
+      <Card className="glass-dark border-white/10">
+        <CardContent className="p-6">
+          <div className="flex flex-col items-center justify-center py-12 space-y-4">
+            <Loader2 className="h-12 w-12 animate-spin text-purple-400" />
+            <p className="text-lg text-purple-100/90">Loading your outfits...</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -211,7 +238,7 @@ const WeeklyOutfitPlanner = ({
             <div className="flex gap-2">
               <Button
                 onClick={autoplanWeek}
-                disabled={isGenerating || outfits.length < 7}
+                disabled={isGenerating || loading || outfits.length < 7}
                 className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
               >
                 {isGenerating ? (
@@ -235,11 +262,12 @@ const WeeklyOutfitPlanner = ({
         </CardHeader>
         
         <CardContent className="p-6">
-          {outfits.length < 7 && (
+          {!loading && outfits.length < 7 && (
             <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-lg p-4 mb-6">
               <p className="text-yellow-200 text-sm">
                 You need at least 7 outfits in your wardrobe to use the Auto Plan feature. 
-                You currently have {outfits.length} outfit{outfits.length !== 1 ? 's' : ''}.
+                You currently have {outfits.length} outfit{outfits.length !== 1 ? 's' : ''}. 
+                Create more outfits in the Mix & Match section to enable weekly planning.
               </p>
             </div>
           )}
