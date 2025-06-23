@@ -2,9 +2,11 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Outfit, ClothingItem } from '@/lib/types';
-import { Sparkles, Star } from 'lucide-react';
+import { Sparkles, Star, AlertCircle } from 'lucide-react';
 import OutfitGrid from '@/components/OutfitGrid';
 import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { useNavigate } from 'react-router-dom';
 
 interface SuggestedOutfitsSectionProps {
   outfits: Outfit[];
@@ -17,6 +19,8 @@ interface SuggestedOutfitsSectionProps {
 }
 
 const SuggestedOutfitsSection = ({ outfits, clothingItems, weather, isLoading }: SuggestedOutfitsSectionProps) => {
+  const navigate = useNavigate();
+
   // Handle edit (would typically open a modal/dialog)
   const handleEdit = (outfit: Outfit) => {
     toast.info(`Viewing outfit: ${outfit.name}`);
@@ -33,6 +37,19 @@ const SuggestedOutfitsSection = ({ outfits, clothingItems, weather, isLoading }:
       ? "Removed from favorites" 
       : "Added to favorites");
   };
+
+  // Filter outfits to only show those with valid items
+  const validOutfits = outfits.filter(outfit => {
+    if (!outfit.items || outfit.items.length === 0) return false;
+    
+    // Check if at least one item from the outfit exists in the user's wardrobe
+    const validItemCount = outfit.items.filter(itemId => 
+      clothingItems.some(item => item.id === itemId)
+    ).length;
+    
+    // Only show outfit if at least one item exists
+    return validItemCount > 0;
+  });
 
   // Show loading state
   if (isLoading) {
@@ -59,6 +76,34 @@ const SuggestedOutfitsSection = ({ outfits, clothingItems, weather, isLoading }:
     );
   }
 
+  // Show empty wardrobe message when no items available
+  if (clothingItems.length === 0) {
+    return (
+      <div className="rounded-xl border border-white/10 overflow-hidden bg-slate-900/50 backdrop-blur-md p-6">
+        <div className="flex items-start justify-between mb-8">
+          <div>
+            <div className="flex items-center gap-2 mb-2">
+              <Sparkles className="h-5 w-5 text-amber-400" />
+              <h3 className="text-xl font-semibold text-white">Your Saved Outfits</h3>
+            </div>
+          </div>
+        </div>
+        
+        <div className="py-16 text-center">
+          <AlertCircle className="h-12 w-12 text-purple-400 mx-auto mb-4" />
+          <p className="text-white text-lg mb-2">I couldn't find your wardrobe. Want help building it?</p>
+          <p className="text-white/60 text-sm mb-6">Let's start by adding some clothing items to create amazing outfits.</p>
+          <Button 
+            onClick={() => navigate('/my-wardrobe')}
+            className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+          >
+            Start Over
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-xl border border-white/10 overflow-hidden bg-slate-900/50 backdrop-blur-md p-6">
       <div className="flex items-start justify-between mb-8">
@@ -73,9 +118,9 @@ const SuggestedOutfitsSection = ({ outfits, clothingItems, weather, isLoading }:
         </div>
       </div>
       
-      {outfits.length > 0 ? (
+      {validOutfits.length > 0 ? (
         <OutfitGrid 
-          outfits={outfits} 
+          outfits={validOutfits} 
           clothingItems={clothingItems} 
           onEdit={handleEdit}
           onDelete={handleDelete}
@@ -87,7 +132,7 @@ const SuggestedOutfitsSection = ({ outfits, clothingItems, weather, isLoading }:
         </div>
       )}
       
-      {outfits.length > 0 && (
+      {validOutfits.length > 0 && (
         <div className="mt-8 text-center">
           <p className="text-white/60 text-sm flex items-center justify-center gap-1">
             <Star className="h-4 w-4 text-amber-400" />

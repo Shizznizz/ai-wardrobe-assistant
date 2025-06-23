@@ -14,39 +14,84 @@ export const useWardrobeData = () => {
 
   // Load user's clothing items from Supabase
   const loadClothingItems = async () => {
-    if (!user) return;
+    // Wait until user is fully available
+    if (!user?.id) {
+      console.log('User ID not available for loading clothing items');
+      return;
+    }
     
     setIsLoadingItems(true);
     try {
-      const { data, error } = await supabase
+      // First try clothing_items table
+      const { data: clothingData, error: clothingError } = await supabase
         .from('clothing_items')
         .select('*')
         .eq('user_id', user.id);
       
-      if (error) {
-        throw error;
+      if (clothingError) {
+        console.error('Error loading from clothing_items:', clothingError);
+        
+        // Fallback to wardrobe_items table
+        const { data: wardrobeData, error: wardrobeError } = await supabase
+          .from('wardrobe_items')
+          .select('*')
+          .eq('user_id', user.id);
+          
+        if (wardrobeError) {
+          console.error('Error loading from wardrobe_items:', wardrobeError);
+          throw wardrobeError;
+        }
+        
+        // Handle wardrobe_items data format
+        if (wardrobeData && wardrobeData.length > 0) {
+          const formattedItems: ClothingItem[] = wardrobeData.map(item => {
+            const itemData = item.item_data || {};
+            return {
+              id: item.id,
+              name: itemData.name || 'Unknown Item',
+              type: itemData.type || 'clothing',
+              color: itemData.color || 'unknown',
+              material: itemData.material || '',
+              season: itemData.season || ['all'],
+              occasions: itemData.occasions || ['casual'],
+              imageUrl: itemData.imageUrl || itemData.image_url,
+              image: itemData.imageUrl || itemData.image_url,
+              favorite: itemData.favorite || false,
+              timesWorn: itemData.timesWorn || 0,
+              lastWorn: itemData.lastWorn ? new Date(itemData.lastWorn) : undefined,
+              dateAdded: item.created_at ? new Date(item.created_at) : new Date()
+            };
+          });
+          setClothingItems(formattedItems);
+        } else {
+          setClothingItems([]);
+        }
+      } else {
+        // Handle clothing_items data format
+        if (clothingData && clothingData.length > 0) {
+          const formattedItems: ClothingItem[] = clothingData.map(item => ({
+            id: item.id,
+            name: item.name,
+            type: item.type,
+            color: item.color,
+            material: item.material,
+            season: item.season,
+            occasions: item.occasions,
+            imageUrl: item.image_url,
+            image: item.image_url,
+            favorite: item.favorite,
+            timesWorn: item.times_worn,
+            lastWorn: item.last_worn ? new Date(item.last_worn) : undefined,
+            dateAdded: item.date_added ? new Date(item.date_added) : new Date()
+          }));
+          setClothingItems(formattedItems);
+        } else {
+          setClothingItems([]);
+        }
       }
-      
-      // Convert database format to app format
-      const formattedItems: ClothingItem[] = data.map(item => ({
-        id: item.id,
-        name: item.name,
-        type: item.type,
-        color: item.color,
-        material: item.material,
-        season: item.season,
-        occasions: item.occasions,
-        imageUrl: item.image_url,
-        image: item.image_url, // For backward compatibility
-        favorite: item.favorite,
-        timesWorn: item.times_worn,
-        lastWorn: item.last_worn ? new Date(item.last_worn) : undefined,
-        dateAdded: item.date_added ? new Date(item.date_added) : new Date()
-      }));
-      
-      setClothingItems(formattedItems);
     } catch (error) {
       console.error('Error loading clothing items:', error);
+      setClothingItems([]);
       toast.error('Failed to load your wardrobe items');
     } finally {
       setIsLoadingItems(false);
@@ -55,7 +100,11 @@ export const useWardrobeData = () => {
 
   // Load user's outfits from Supabase
   const loadOutfits = async () => {
-    if (!user) return;
+    // Wait until user is fully available
+    if (!user?.id) {
+      console.log('User ID not available for loading outfits');
+      return;
+    }
     
     setIsLoadingOutfits(true);
     try {
@@ -350,15 +399,16 @@ export const useWardrobeData = () => {
 
   // Load data when user authentication changes
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (isAuthenticated && user?.id) {
+      console.log('Loading wardrobe data for user:', user.id);
       loadClothingItems();
       loadOutfits();
     } else {
-      // Clear data when logged out
+      // Clear data when logged out or user not ready
       setClothingItems([]);
       setOutfits([]);
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user?.id]);
 
   return {
     clothingItems,

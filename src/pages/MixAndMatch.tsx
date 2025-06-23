@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { Outfit } from '@/lib/types';
@@ -31,6 +30,17 @@ const MixAndMatch = () => {
   const [situation, setSituation] = useState('casual');
   const [isCreateOutfitDialogOpen, setIsCreateOutfitDialogOpen] = useState(false);
   
+  // Scroll to top on page load
+  useEffect(() => {
+    // Only scroll to top if not coming from a specific anchor
+    if (!window.location.hash) {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    }
+  }, []);
+
   const handleStyleMe = () => {
     if (!isAuthenticated) {
       toast.error("Please log in to get personalized outfit recommendations");
