@@ -8,15 +8,24 @@ import { useLocation } from "react-router-dom";
  */
 export default function ScrollToTop() {
   const location = useLocation();
-  const { pathname } = location;
+  const { pathname, hash } = location;
 
   useEffect(() => {
-    // Scroll to top whenever the pathname changes
+    // If there's a hash (anchor), don't scroll to top - let the browser handle the anchor
+    if (hash) {
+      const element = document.querySelector(hash);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth" });
+        return;
+      }
+    }
+    
+    // Scroll to top whenever the pathname changes (no hash)
     window.scrollTo({
       top: 0,
       behavior: "smooth" // Use smooth scrolling for better UX
     });
-  }, [pathname]); // Only trigger on pathname changes
+  }, [pathname, hash]); // Track both pathname and hash changes
 
   return null;
 }
