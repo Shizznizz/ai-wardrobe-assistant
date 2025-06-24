@@ -1,6 +1,6 @@
 
 import { Button } from '@/components/ui/button';
-import { X, RefreshCw, Wand2 } from 'lucide-react';
+import { X, RefreshCw, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface ImagePreviewSectionProps {
@@ -32,7 +32,7 @@ const ImagePreviewSection = ({
           <div className="relative aspect-square rounded-lg overflow-hidden border border-slate-600">
             <img 
               src={imagePreview} 
-              alt="Preview" 
+              alt="Clothing item preview" 
               className="w-full h-full object-cover"
             />
             
@@ -49,9 +49,14 @@ const ImagePreviewSection = ({
             {/* Processing overlay */}
             {isProcessing && (
               <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                <div className="flex items-center gap-2 text-white bg-black/70 px-4 py-2 rounded-lg">
-                  <Wand2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm">Removing background...</span>
+                <div className="flex flex-col items-center gap-3 text-white bg-black/70 px-6 py-4 rounded-lg">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 animate-pulse text-purple-400" />
+                    <span className="text-sm font-medium">Removing background...</span>
+                  </div>
+                  <div className="w-32 h-1 bg-slate-600 rounded-full overflow-hidden">
+                    <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full animate-pulse"></div>
+                  </div>
                 </div>
               </div>
             )}
@@ -70,7 +75,7 @@ const ImagePreviewSection = ({
                 variant="outline"
                 size="sm"
                 onClick={onRetryBackgroundRemoval}
-                className="w-full bg-transparent border-orange-500/30 text-orange-300 hover:bg-orange-500/10"
+                className="w-full bg-transparent border-orange-500/30 text-orange-300 hover:bg-orange-500/10 hover:border-orange-500/50"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Retry Background Removal

@@ -104,7 +104,7 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
       debugMode,
       onProgress: (message) => {
         if (debugMode) {
-          console.log('Background removal progress:', message);
+          console.log('🔍 Background removal progress:', message);
         }
       }
     });
@@ -113,7 +113,7 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
 
     if (result.success && result.resultBase64) {
       setImagePreview(result.resultBase64);
-      setLastUsedModel('briaai/RMBG-1.4');
+      setLastUsedModel('BRIA-RMBG 1.4');
       toast.success('Background removed successfully!');
       
       // Update the file reference for consistency
@@ -229,6 +229,7 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
       onUpload(newItem);
       resetForm();
       setOpen(false);
+      toast.success('Item added to your wardrobe!');
     } catch (error) {
       console.error("Upload error:", error);
       toast.error('Error adding item. Please try again.');
@@ -269,7 +270,7 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
         <DialogHeader>
           <DialogTitle className="text-center text-white">Add Clothing Item</DialogTitle>
           <DialogDescription className="sr-only">
-            Add a new item to your wardrobe
+            Add a new item to your wardrobe with AI background removal
           </DialogDescription>
         </DialogHeader>
         
@@ -295,6 +296,7 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
               debugMode={debugMode}
               onDebugChange={setDebugMode}
               lastUsedModel={lastUsedModel}
+              isProcessing={isProcessingBackground}
             />
 
             {!imagePreview ? (
@@ -348,11 +350,11 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
             type="button" 
             onClick={handleSubmit}
             disabled={isFormDisabled}
-            className="relative bg-blue-600 hover:bg-blue-700 text-white"
+            className="relative bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
           >
             {isFormDisabled ? (
               <>
-                <span className="opacity-0">Adding...</span>
+                <span className="opacity-0">Add to Wardrobe</span>
                 <span className="absolute inset-0 flex items-center justify-center">
                   <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>

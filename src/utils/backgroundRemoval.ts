@@ -14,7 +14,7 @@ export interface BackgroundRemovalResult {
 }
 
 /**
- * Remove background from image using Supabase Edge Function
+ * Remove background from image using Supabase Edge Function with BRIA-RMBG 1.4
  */
 export const removeBackground = async (
   imageBase64: string,
@@ -24,24 +24,25 @@ export const removeBackground = async (
 
   try {
     if (debugMode) {
-      console.log('🔍 Debug: Sending image to background removal, size:', imageBase64.length);
+      console.log('🔍 Debug: Starting background removal with BRIA-RMBG 1.4');
+      console.log('🔍 Debug: Image base64 length:', imageBase64.length);
     }
 
-    onProgress?.('Removing background...');
+    onProgress?.('Removing background with AI...');
 
     const response = await supabase.functions.invoke('remove-background', {
       body: JSON.stringify({ imageBase64 }),
     });
 
     if (debugMode) {
-      console.log('🔍 Debug: Background removal response:', response);
+      console.log('🔍 Debug: Edge function response:', response);
     }
 
     if (response.error) {
-      console.error('Background removal failed:', response.error);
+      console.error('Background removal API error:', response.error);
       return {
         success: false,
-        error: 'API request failed',
+        error: 'Background removal service unavailable',
         originalBase64: imageBase64
       };
     }
@@ -50,7 +51,8 @@ export const removeBackground = async (
       const resultBase64 = response.data.resultBase64;
       
       if (debugMode) {
-        console.log('🔍 Debug: Received processed image, size:', resultBase64.length);
+        console.log('🔍 Debug: Successfully received processed image');
+        console.log('🔍 Debug: Result base64 length:', resultBase64.length);
       }
 
       onProgress?.('Background removed successfully!');
@@ -61,10 +63,10 @@ export const removeBackground = async (
         originalBase64: imageBase64
       };
     } else {
-      console.error('Invalid response format from background removal');
+      console.warn('Invalid response format from background removal service');
       return {
         success: false,
-        error: 'Invalid response format',
+        error: 'Invalid response from background removal service',
         originalBase64: imageBase64
       };
     }
@@ -72,7 +74,7 @@ export const removeBackground = async (
     console.error('Background removal error:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
       originalBase64: imageBase64
     };
   }
