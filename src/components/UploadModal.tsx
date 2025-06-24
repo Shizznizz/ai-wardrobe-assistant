@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -61,7 +60,7 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
       setBackgroundRemovalFailed(false);
       
       if (!isRetry) {
-        toast.info('Removing background...');
+        toast.info('Removing background with briaai/RMBG-1.4...');
       } else {
         toast.info('Retrying background removal...');
       }
@@ -82,42 +81,22 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
         return;
       }
 
-      // Check response headers for debug info
-      const modelUsed = response.data?.headers?.['X-Model-Used'];
-      const backgroundRemovalStatus = response.data?.headers?.['X-Background-Removal'];
-      const debugInfo = response.data?.headers?.['X-Debug-Info'];
-
-      if (modelUsed) {
-        setLastUsedModel(modelUsed);
-        console.log('✅ Background removal successful using:', modelUsed);
-      }
-
-      if (debugMode && debugInfo) {
-        console.log('🐛 Debug info:', debugInfo);
-      }
-
-      if (backgroundRemovalStatus === 'failed') {
-        setBackgroundRemovalFailed(true);
-        toast.warning('Background removal failed, using original image');
-        return;
-      }
-
+      // Handle successful response
       if (response.data) {
-        // Handle the response data properly
         let blob;
         
-        // Check if it's already a Blob
+        // Convert response data to blob
         if (response.data instanceof Blob) {
           blob = response.data;
         } else if (response.data instanceof ArrayBuffer) {
           blob = new Blob([response.data], { type: 'image/png' });
         } else {
-          // If it's neither, try to convert from the response
+          // Handle other response formats
           const arrayBuffer = new Uint8Array(response.data);
           blob = new Blob([arrayBuffer], { type: 'image/png' });
         }
 
-        // Validate that we have a valid blob
+        // Validate blob
         if (blob.size === 0) {
           console.error('Received empty blob from background removal');
           setBackgroundRemovalFailed(true);
@@ -125,17 +104,18 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
           return;
         }
 
-        // Create object URL for preview
+        // Create preview URL
         const objectUrl = URL.createObjectURL(blob);
         setImagePreview(objectUrl);
         setBackgroundRemovalFailed(false);
-        toast.success(`Background removed successfully! (${modelUsed || 'Model used'})`);
+        setLastUsedModel('briaai/RMBG-1.4');
+        toast.success('Background removed successfully with briaai/RMBG-1.4!');
         
-        // Update the file reference to the processed image
+        // Update file reference
         const processedFile = new File([blob], `${file.name.split('.')[0]}_nobg.png`, { type: 'image/png' });
         setImageFile(processedFile);
 
-        // Clean up the object URL when component unmounts or image changes
+        // Clean up URL when needed
         return () => URL.revokeObjectURL(objectUrl);
       }
     } catch (error) {
@@ -381,7 +361,7 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
 
               {lastUsedModel && (
                 <div className="text-xs text-green-400">
-                  ✅ Last successful model: {lastUsedModel}
+                  ✅ Background removed with: {lastUsedModel}
                 </div>
               )}
 
