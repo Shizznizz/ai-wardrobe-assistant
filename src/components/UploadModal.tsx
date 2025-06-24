@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -54,74 +55,77 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
     }
   }, [name, type, color, material, seasons, imagePreview, attemptedSubmit]);
 
+  const convertFileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const result = reader.result as string;
+        resolve(result);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   const processBackgroundRemoval = async (file: File, isRetry = false) => {
     try {
       setIsRemovingBackground(true);
       setBackgroundRemovalFailed(false);
       
       if (!isRetry) {
-        toast.info('Removing background with briaai/RMBG-1.4...');
+        toast.info('Removing background...');
       } else {
         toast.info('Retrying background removal...');
       }
       
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('skipBackgroundRemoval', skipBackgroundRemoval.toString());
-      formData.append('debugMode', debugMode.toString());
+      // Convert file to base64
+      const imageBase64 = await convertFileToBase64(file);
+      
+      if (debugMode) {
+        console.log('🔍 Debug: Sending image to background removal, size:', imageBase64.length);
+      }
 
       const response = await supabase.functions.invoke('remove-background', {
-        body: formData,
+        body: JSON.stringify({ imageBase64 }),
       });
+
+      if (debugMode) {
+        console.log('🔍 Debug: Background removal response:', response);
+      }
 
       if (response.error) {
         console.error('Background removal failed:', response.error);
         setBackgroundRemovalFailed(true);
-        toast.warning('Background removal failed, using original image');
+        toast.info("Couldn't remove background. The original image has been added instead.");
         return;
       }
 
       // Handle successful response
-      if (response.data) {
-        let blob;
+      if (response.data && response.data.resultBase64) {
+        const resultBase64 = response.data.resultBase64;
         
-        // Convert response data to blob
-        if (response.data instanceof Blob) {
-          blob = response.data;
-        } else if (response.data instanceof ArrayBuffer) {
-          blob = new Blob([response.data], { type: 'image/png' });
-        } else {
-          // Handle other response formats
-          const arrayBuffer = new Uint8Array(response.data);
-          blob = new Blob([arrayBuffer], { type: 'image/png' });
+        if (debugMode) {
+          console.log('🔍 Debug: Received processed image, size:', resultBase64.length);
         }
 
-        // Validate blob
-        if (blob.size === 0) {
-          console.error('Received empty blob from background removal');
-          setBackgroundRemovalFailed(true);
-          toast.warning('Background removal failed, using original image');
-          return;
-        }
-
-        // Create preview URL
-        const objectUrl = URL.createObjectURL(blob);
-        setImagePreview(objectUrl);
+        setImagePreview(resultBase64);
         setBackgroundRemovalFailed(false);
         setLastUsedModel('briaai/RMBG-1.4');
-        toast.success('Background removed successfully with briaai/RMBG-1.4!');
+        toast.success('Background removed successfully!');
         
-        // Update file reference
-        const processedFile = new File([blob], `${file.name.split('.')[0]}_nobg.png`, { type: 'image/png' });
+        // Convert base64 back to File for consistency
+        const response_blob = await fetch(resultBase64).then(r => r.blob());
+        const processedFile = new File([response_blob], `${file.name.split('.')[0]}_nobg.png`, { type: 'image/png' });
         setImageFile(processedFile);
-
-        // Clean up URL when needed
-        return () => URL.revokeObjectURL(objectUrl);
+      } else {
+        console.error('Invalid response format from background removal');
+        setBackgroundRemovalFailed(true);
+        toast.info("Couldn't remove background. The original image has been added instead.");
       }
     } catch (error) {
       console.error('Background removal error:', error);
       setBackgroundRemovalFailed(true);
-      toast.warning('Background removal failed, using original image');
+      toast.info("Couldn't remove background. The original image has been added instead.");
     } finally {
       setIsRemovingBackground(false);
     }
