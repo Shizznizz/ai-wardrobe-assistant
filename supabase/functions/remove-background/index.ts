@@ -17,6 +17,7 @@ serve(async (req) => {
     const file = formData.get("file") as File
     
     if (!file) {
+      console.error('No file provided in request')
       return new Response(
         JSON.stringify({ error: "Missing file" }), 
         { 
@@ -28,6 +29,7 @@ serve(async (req) => {
 
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY")
     if (!hfApiKey) {
+      console.error('HUGGINGFACE_API_KEY environment variable not set')
       return new Response(
         JSON.stringify({ error: "Hugging Face API key missing" }), 
         { 
@@ -38,29 +40,64 @@ serve(async (req) => {
     }
 
     console.log('Processing background removal for file:', file.name, 'Size:', file.size)
+    console.log('Using API key (first 8 chars):', hfApiKey.substring(0, 8) + '...')
 
-    const response = await fetch("https://api-inference.huggingface.co/models/danielgatis/rembg", {
+    // Convert file to ArrayBuffer for the request
+    const fileBuffer = await file.arrayBuffer()
+    
+    // Use the correct Hugging Face Inference API endpoint for background removal
+    const response = await fetch("https://api-inference.huggingface.co/models/briaai/RMBG-1.4", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${hfApiKey}`
+        Authorization: `Bearer ${hfApiKey}`,
+        'Content-Type': 'application/octet-stream'
       },
-      body: file.stream()
+      body: fileBuffer
     })
+
+    console.log('Hugging Face response status:', response.status)
+    console.log('Hugging Face response headers:', Object.fromEntries(response.headers.entries()))
 
     if (!response.ok) {
       const errorText = await response.text()
       console.error('Hugging Face API error:', errorText)
-      return new Response(
-        JSON.stringify({ error: `Background removal failed: ${errorText}` }), 
-        { 
-          status: 502,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      console.error('Response status:', response.status, response.statusText)
+      
+      // Try alternative model if the first one fails
+      console.log('Trying alternative model: silueta/background-removal')
+      const altResponse = await fetch("https://api-inference.huggingface.co/models/silueta/background-removal", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${hfApiKey}`,
+          'Content-Type': 'application/octet-stream'
+        },
+        body: fileBuffer
+      })
+
+      if (!altResponse.ok) {
+        const altErrorText = await altResponse.text()
+        console.error('Alternative model also failed:', altErrorText)
+        return new Response(
+          JSON.stringify({ error: `Background removal failed: ${errorText}. Alternative model error: ${altErrorText}` }), 
+          { 
+            status: 502,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          }
+        )
+      }
+
+      const altBuffer = await altResponse.arrayBuffer()
+      console.log('Alternative model successful, returning PNG, size:', altBuffer.byteLength)
+      return new Response(altBuffer, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "image/png"
         }
-      )
+      })
     }
 
     const buffer = await response.arrayBuffer()
-    console.log('Background removal successful, returning PNG')
+    console.log('Background removal successful, returning PNG, size:', buffer.byteLength)
 
     return new Response(buffer, {
       headers: {
