@@ -1,8 +1,7 @@
-
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Camera, AlertCircle } from 'lucide-react';
+import { Camera, AlertCircle, Wand2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ClothingType, ClothingColor, ClothingMaterial, ClothingSeason, ClothingOccasion } from '@/lib/types';
 import ImageUploader from './wardrobe/ImageUploader';
@@ -11,6 +10,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 interface UploadModalProps {
   onUpload: (item: any) => void;
@@ -34,6 +34,7 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+  const [isRemovingBackground, setIsRemovingBackground] = useState(false);
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
   const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']; // Added webp
@@ -47,7 +48,7 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
     }
   }, [name, type, color, material, seasons, imagePreview, attemptedSubmit]);
 
-  const handleImageChange = (file: File) => {
+  const handleImageChange = async (file: File) => {
     // Validate file type
     if (!ALLOWED_FILE_TYPES.includes(file.type)) {
       toast.error('Invalid file type. Please upload a PNG, JPG, JPEG, WEBP, or GIF image.');
@@ -60,12 +61,52 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
       return;
     }
 
+    // First set the original image
     const reader = new FileReader();
     reader.onload = () => {
       setImagePreview(reader.result as string);
     };
     reader.readAsDataURL(file);
     setImageFile(file);
+
+    // Then try to remove background
+    try {
+      setIsRemovingBackground(true);
+      toast.info('Removing background...');
+      
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const { data: backgroundRemovedBlob, error } = await supabase.functions.invoke('remove-background', {
+        body: formData,
+      });
+
+      if (error) {
+        console.error('Background removal failed:', error);
+        toast.warning('Background removal failed, using original image');
+        return;
+      }
+
+      if (backgroundRemovedBlob) {
+        // Convert the response to a blob and then to data URL
+        const blob = new Blob([backgroundRemovedBlob], { type: 'image/png' });
+        const backgroundRemovedReader = new FileReader();
+        backgroundRemovedReader.onload = () => {
+          setImagePreview(backgroundRemovedReader.result as string);
+          toast.success('Background removed successfully!');
+        };
+        backgroundRemovedReader.readAsDataURL(blob);
+        
+        // Update the file reference to the processed image
+        const processedFile = new File([blob], `${file.name.split('.')[0]}_nobg.png`, { type: 'image/png' });
+        setImageFile(processedFile);
+      }
+    } catch (error) {
+      console.error('Background removal error:', error);
+      toast.warning('Background removal failed, using original image');
+    } finally {
+      setIsRemovingBackground(false);
+    }
   };
 
   const clearImage = () => {
@@ -230,12 +271,22 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
         
         <ScrollArea className="max-h-[calc(90vh-180px)]">
           <form onSubmit={handleSubmit} className="space-y-4 py-2 px-1">
-            <ImageUploader 
-              imagePreview={imagePreview}
-              onImageChange={handleImageChange}
-              onClearImage={clearImage}
-              label="Upload an image (PNG, JPG, JPEG, WEBP, or GIF, max 10MB)"
-            />
+            <div className="relative">
+              <ImageUploader 
+                imagePreview={imagePreview}
+                onImageChange={handleImageChange}
+                onClearImage={clearImage}
+                label="Upload an image (PNG, JPG, JPEG, WEBP, or GIF, max 10MB)"
+              />
+              {isRemovingBackground && (
+                <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
+                  <div className="flex items-center gap-2 text-white">
+                    <Wand2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm">Removing background...</span>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <ClothingDetailsForm
               name={name}
@@ -269,10 +320,10 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
           <Button 
             type="button" 
             onClick={handleSubmit}
-            disabled={isSubmitting || isLoading}
+            disabled={isSubmitting || isLoading || isRemovingBackground}
             className="relative bg-blue-600 hover:bg-blue-700 text-white"
           >
-            {isSubmitting || isLoading ? (
+            {isSubmitting || isLoading || isRemovingBackground ? (
               <>
                 <span className="opacity-0">Adding...</span>
                 <span className="absolute inset-0 flex items-center justify-center">
