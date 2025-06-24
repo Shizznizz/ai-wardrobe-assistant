@@ -25,15 +25,12 @@ serve(async (req) => {
       )
     }
 
-    const formData = await req.formData()
-    const file = formData.get("file") as File
-    const skipBackgroundRemoval = formData.get("skipBackgroundRemoval") === "true"
-    const debugMode = formData.get("debugMode") === "true"
+    const { imageBase64 } = await req.json()
     
-    if (!file) {
-      console.error('❌ No file provided in request')
+    if (!imageBase64) {
+      console.error('❌ No imageBase64 provided in request')
       return new Response(
-        JSON.stringify({ error: "Missing file" }), 
+        JSON.stringify({ error: "Missing imageBase64" }), 
         { 
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -41,24 +38,50 @@ serve(async (req) => {
       )
     }
 
-    if (skipBackgroundRemoval) {
-      console.log('⏭️ Skipping background removal as requested')
-      const originalBuffer = await file.arrayBuffer()
-      return new Response(originalBuffer, {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": file.type
-        }
-      })
+    console.log('🎯 Processing background removal for base64 image, size:', imageBase64.length)
+
+    // Extract MIME type from base64 data URL
+    let mimeType = 'image/png' // default
+    let base64Data = imageBase64
+    
+    if (imageBase64.startsWith('data:')) {
+      const mimeMatch = imageBase64.match(/data:([^;]+);base64,(.*)/)
+      if (mimeMatch) {
+        mimeType = mimeMatch[1]
+        base64Data = mimeMatch[2]
+        console.log('📋 Detected MIME type:', mimeType)
+      }
     }
 
-    console.log('🎯 Processing background removal for file:', file.name, 'Size:', file.size, 'Type:', file.type)
+    // Validate supported formats
+    if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(mimeType)) {
+      console.error('❌ Unsupported image format:', mimeType)
+      return new Response(
+        JSON.stringify({ error: `Unsupported image format: ${mimeType}` }), 
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
 
-    // Convert file to binary for briaai/RMBG-1.4
-    const fileArrayBuffer = await file.arrayBuffer()
-    const binaryImage = new Uint8Array(fileArrayBuffer)
+    // Convert base64 to binary for Hugging Face API
+    let binaryImage: Uint8Array
+    try {
+      binaryImage = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
+      console.log('📦 Converted to binary, size:', binaryImage.length, 'bytes')
+    } catch (error) {
+      console.error('❌ Failed to decode base64:', error)
+      return new Response(
+        JSON.stringify({ error: "Invalid base64 data" }), 
+        { 
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        }
+      )
+    }
 
-    console.log('🚀 Trying briaai/RMBG-1.4 model')
+    console.log('🚀 Calling briaai/RMBG-1.4 model')
     
     const response = await fetch('https://api-inference.huggingface.co/models/briaai/RMBG-1.4', {
       method: 'POST',
@@ -70,27 +93,26 @@ serve(async (req) => {
     })
 
     console.log(`📊 briaai/RMBG-1.4 response status: ${response.status}`)
-    
-    if (debugMode) {
-      console.log(`📋 briaai/RMBG-1.4 response headers:`, Object.fromEntries(response.headers.entries()))
-    }
+    console.log(`📋 Response headers:`, Object.fromEntries(response.headers.entries()))
 
     if (!response.ok) {
       const errorText = await response.text()
       console.error(`❌ briaai/RMBG-1.4 error (${response.status}): ${errorText}`)
       
-      // Return original image as fallback
-      console.log('🔄 Background removal failed, returning original image as fallback')
-      const originalBuffer = await file.arrayBuffer()
-      
-      return new Response(originalBuffer, {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": file.type,
-          "X-Background-Removal": "failed",
-          "X-Error": errorText
+      return new Response(
+        JSON.stringify({ 
+          error: `Background removal failed: ${response.status} - ${errorText}`,
+          details: {
+            status: response.status,
+            statusText: response.statusText,
+            response: errorText
+          }
+        }), 
+        { 
+          status: response.status,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
-      })
+      )
     }
 
     const resultBuffer = await response.arrayBuffer()
@@ -98,32 +120,36 @@ serve(async (req) => {
 
     if (resultBuffer.byteLength === 0) {
       console.error('❌ Empty response buffer from briaai/RMBG-1.4')
-      
-      // Return original image as fallback
-      const originalBuffer = await file.arrayBuffer()
-      return new Response(originalBuffer, {
-        headers: {
-          ...corsHeaders,
-          "Content-Type": file.type,
-          "X-Background-Removal": "failed",
-          "X-Error": "Empty response buffer"
+      return new Response(
+        JSON.stringify({ error: "Empty response from background removal service" }), 
+        { 
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
-      })
+      )
     }
 
-    return new Response(resultBuffer, {
-      headers: {
-        ...corsHeaders,
-        "Content-Type": "image/png",
-        "X-Model-Used": "briaai/RMBG-1.4",
-        "X-Background-Removal": "success"
+    // Convert result to base64 with PNG MIME type (briaai/RMBG-1.4 returns PNG)
+    const resultBase64Data = btoa(String.fromCharCode(...new Uint8Array(resultBuffer)))
+    const resultBase64 = `data:image/png;base64,${resultBase64Data}`
+
+    console.log('🎉 Returning processed image, base64 size:', resultBase64.length)
+
+    return new Response(
+      JSON.stringify({ resultBase64 }), 
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200
       }
-    })
+    )
 
   } catch (err) {
     console.error('💥 Error in remove-background function:', err)
     return new Response(
-      JSON.stringify({ error: `Error: ${err.message}` }), 
+      JSON.stringify({ 
+        error: `Server error: ${err.message}`,
+        details: err.stack 
+      }), 
       { 
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
