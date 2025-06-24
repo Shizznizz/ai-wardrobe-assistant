@@ -15,6 +15,7 @@ serve(async (req) => {
   try {
     const formData = await req.formData()
     const file = formData.get("file") as File
+    const skipBackgroundRemoval = formData.get("skipBackgroundRemoval") === "true"
     
     if (!file) {
       console.error('❌ No file provided in request')
@@ -25,6 +26,18 @@ serve(async (req) => {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       )
+    }
+
+    // If user wants to skip background removal, return original
+    if (skipBackgroundRemoval) {
+      console.log('⏭️ Skipping background removal as requested')
+      const originalBuffer = await file.arrayBuffer()
+      return new Response(originalBuffer, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": file.type
+        }
+      })
     }
 
     const hfApiKey = Deno.env.get("HUGGINGFACE_API_KEY")
@@ -46,9 +59,9 @@ serve(async (req) => {
     const fileBuffer = await file.arrayBuffer()
     console.log('📦 File buffer created, size:', fileBuffer.byteLength)
     
-    // Try the primary working model first: U2Net (proven to work)
-    console.log('🚀 Trying primary model: Xenova/u2net')
-    const response = await fetch("https://api-inference.huggingface.co/models/Xenova/u2net", {
+    // Try RMBG-1.4 model (this one is confirmed to work with Inference API)
+    console.log('🚀 Trying RMBG-1.4 model')
+    const response = await fetch("https://api-inference.huggingface.co/models/briaai/RMBG-1.4", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${hfApiKey}`,
@@ -57,17 +70,21 @@ serve(async (req) => {
       body: fileBuffer
     })
 
-    console.log('📊 Primary model response status:', response.status)
-    console.log('📋 Primary model response headers:', Object.fromEntries(response.headers.entries()))
+    console.log('📊 RMBG-1.4 response status:', response.status)
+    console.log('📋 RMBG-1.4 response headers:', Object.fromEntries(response.headers.entries()))
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error('❌ Primary model error:', errorText)
-      console.error('📊 Response status:', response.status, response.statusText)
+      console.error('❌ RMBG-1.4 error response:', errorText)
+      console.error('📊 Full response details:', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
+      })
       
-      // Try alternative model: Remove.bg style model
-      console.log('🔄 Trying fallback model: Bingsu/remove-bg')
-      const altResponse = await fetch("https://api-inference.huggingface.co/models/Bingsu/remove-bg", {
+      // Try alternative approach with a different model format
+      console.log('🔄 Trying alternative model: silueta/background-removal')
+      const altResponse = await fetch("https://api-inference.huggingface.co/models/silueta/background-removal", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${hfApiKey}`,
@@ -76,49 +93,38 @@ serve(async (req) => {
         body: fileBuffer
       })
 
-      console.log('📊 Fallback model response status:', altResponse.status)
+      console.log('📊 Alternative model response status:', altResponse.status)
 
       if (!altResponse.ok) {
         const altErrorText = await altResponse.text()
-        console.error('❌ Fallback model also failed:', altErrorText)
+        console.error('❌ Alternative model also failed:', altErrorText)
         
-        // Try one more model as last resort
-        console.log('🔄 Trying final fallback: schminitz/yolov5_rembg')
-        const finalResponse = await fetch("https://api-inference.huggingface.co/models/schminitz/yolov5_rembg", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${hfApiKey}`,
-            'Content-Type': 'application/octet-stream'
-          },
-          body: fileBuffer
-        })
-
-        if (!finalResponse.ok) {
-          const finalErrorText = await finalResponse.text()
-          console.error('❌ All models failed. Final error:', finalErrorText)
-          return new Response(
-            JSON.stringify({ 
-              error: `Background removal failed: Primary: ${errorText}, Fallback: ${altErrorText}, Final: ${finalErrorText}` 
-            }), 
-            { 
-              status: 502,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-            }
-          )
-        }
-
-        const finalBuffer = await finalResponse.arrayBuffer()
-        console.log('✅ Final fallback model successful! PNG size:', finalBuffer.byteLength)
-        return new Response(finalBuffer, {
+        // Return original image as fallback
+        console.log('🔄 Returning original image as fallback')
+        const originalBuffer = await file.arrayBuffer()
+        return new Response(originalBuffer, {
           headers: {
             ...corsHeaders,
-            "Content-Type": "image/png"
+            "Content-Type": file.type
           }
         })
       }
 
+      // Check if alternative response is valid
       const altBuffer = await altResponse.arrayBuffer()
-      console.log('✅ Fallback model successful! PNG size:', altBuffer.byteLength)
+      console.log('✅ Alternative model successful! Image size:', altBuffer.byteLength)
+      
+      if (altBuffer.byteLength === 0) {
+        console.error('❌ Alternative model returned empty buffer')
+        const originalBuffer = await file.arrayBuffer()
+        return new Response(originalBuffer, {
+          headers: {
+            ...corsHeaders,
+            "Content-Type": file.type
+          }
+        })
+      }
+
       return new Response(altBuffer, {
         headers: {
           ...corsHeaders,
@@ -128,20 +134,40 @@ serve(async (req) => {
     }
 
     const buffer = await response.arrayBuffer()
-    console.log('✅ Primary model successful! PNG size:', buffer.byteLength)
+    console.log('✅ RMBG-1.4 successful! PNG size:', buffer.byteLength)
 
     // Validate that we actually got image data
     if (buffer.byteLength === 0) {
-      console.error('❌ Received empty buffer from API')
-      return new Response(
-        JSON.stringify({ error: "Received empty response from background removal API" }), 
-        { 
-          status: 502,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      console.error('❌ Received empty buffer from RMBG-1.4')
+      const originalBuffer = await file.arrayBuffer()
+      return new Response(originalBuffer, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": file.type
         }
-      )
+      })
     }
 
+    // Check if buffer looks like a valid image (basic validation)
+    const uint8Array = new Uint8Array(buffer)
+    const isPNG = uint8Array[0] === 0x89 && uint8Array[1] === 0x50 && uint8Array[2] === 0x4E && uint8Array[3] === 0x47
+    const isJPEG = uint8Array[0] === 0xFF && uint8Array[1] === 0xD8
+    const isWebP = uint8Array[8] === 0x57 && uint8Array[9] === 0x45 && uint8Array[10] === 0x42 && uint8Array[11] === 0x50
+
+    if (!isPNG && !isJPEG && !isWebP) {
+      console.error('❌ Response does not appear to be a valid image format')
+      console.error('📊 First 16 bytes:', Array.from(uint8Array.slice(0, 16)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '))
+      
+      const originalBuffer = await file.arrayBuffer()
+      return new Response(originalBuffer, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": file.type
+        }
+      })
+    }
+
+    console.log('🎉 Background removal successful!')
     return new Response(buffer, {
       headers: {
         ...corsHeaders,

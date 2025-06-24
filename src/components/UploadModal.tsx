@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Camera, AlertCircle, Wand2 } from 'lucide-react';
+import { Camera, AlertCircle, Wand2, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { ClothingType, ClothingColor, ClothingMaterial, ClothingSeason, ClothingOccasion } from '@/lib/types';
 import ImageUploader from './wardrobe/ImageUploader';
@@ -11,6 +11,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 interface UploadModalProps {
   onUpload: (item: any) => void;
@@ -35,9 +37,10 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
   const [isLoading, setIsLoading] = useState(false);
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [isRemovingBackground, setIsRemovingBackground] = useState(false);
+  const [skipBackgroundRemoval, setSkipBackgroundRemoval] = useState(false);
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-  const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif']; // Added webp
+  const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
 
   // Reset validation errors when form fields change
   useEffect(() => {
@@ -69,6 +72,12 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
     reader.readAsDataURL(file);
     setImageFile(file);
 
+    // Skip background removal if user opted out
+    if (skipBackgroundRemoval) {
+      toast.info('Background removal skipped');
+      return;
+    }
+
     // Then try to remove background
     try {
       setIsRemovingBackground(true);
@@ -76,6 +85,7 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
       
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('skipBackgroundRemoval', skipBackgroundRemoval.toString());
 
       const { data: backgroundRemovedBlob, error } = await supabase.functions.invoke('remove-background', {
         body: formData,
@@ -271,6 +281,21 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
         
         <ScrollArea className="max-h-[calc(90vh-180px)]">
           <form onSubmit={handleSubmit} className="space-y-4 py-2 px-1">
+            {/* Background Removal Toggle */}
+            <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <Settings className="h-4 w-4 text-purple-400" />
+                <Label htmlFor="skip-bg-removal" className="text-sm text-white">
+                  Skip background removal
+                </Label>
+              </div>
+              <Switch
+                id="skip-bg-removal"
+                checked={skipBackgroundRemoval}
+                onCheckedChange={setSkipBackgroundRemoval}
+              />
+            </div>
+
             <div className="relative">
               <ImageUploader 
                 imagePreview={imagePreview}
