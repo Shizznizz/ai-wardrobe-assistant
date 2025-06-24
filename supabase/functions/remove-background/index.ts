@@ -27,23 +27,25 @@ async function tryModelWithRetry(modelUrl: string, modelName: string, fileBuffer
         method: "POST",
         headers: {
           Authorization: `Bearer ${hfApiKey}`,
-          'Content-Type': 'application/octet-stream'
+          'Content-Type': 'application/json'
         },
-        body: fileBuffer
+        body: JSON.stringify({
+          inputs: Array.from(new Uint8Array(fileBuffer))
+        })
       });
 
       console.log(`📊 ${modelName} response status: ${response.status}`);
       console.log(`📋 ${modelName} response headers:`, Object.fromEntries(response.headers.entries()));
 
       if (response.status === 429) {
-        const waitTime = Math.min(1000 * Math.pow(2, attempt - 1), 10000); // Exponential backoff, max 10s
+        const waitTime = Math.min(2000 * Math.pow(2, attempt - 1), 10000);
         console.log(`⏳ Rate limited, waiting ${waitTime}ms before retry`);
         await delay(waitTime);
         continue;
       }
 
       if (response.status === 503) {
-        const waitTime = 2000 * attempt; // Linear backoff for service unavailable
+        const waitTime = 3000 * attempt;
         console.log(`🔧 Service unavailable, waiting ${waitTime}ms before retry`);
         await delay(waitTime);
         continue;
@@ -62,20 +64,18 @@ async function tryModelWithRetry(modelUrl: string, modelName: string, fileBuffer
       const buffer = await response.arrayBuffer();
       console.log(`✅ ${modelName} successful! Buffer size: ${buffer.byteLength}`);
 
-      // Validate that we actually got image data
       if (buffer.byteLength === 0) {
         console.error(`❌ ${modelName} returned empty buffer`);
         return { success: false, error: "Empty response buffer" };
       }
 
-      // Check if buffer looks like a valid image (basic validation)
+      // Validate image format
       const uint8Array = new Uint8Array(buffer);
-      const isPNG = uint8Array.length >= 8 && uint8Array[0] === 0x89 && uint8Array[1] === 0x50 && uint8Array[2] === 0x4E && uint8Array[3] === 0x47;
+      const isPNG = uint8Array.length >= 8 && uint8Array[0] === 0x89 && uint8Array[1] === 0x50;
       const isJPEG = uint8Array.length >= 2 && uint8Array[0] === 0xFF && uint8Array[1] === 0xD8;
-      const isWebP = uint8Array.length >= 12 && uint8Array[8] === 0x57 && uint8Array[9] === 0x45 && uint8Array[10] === 0x42 && uint8Array[11] === 0x50;
-
-      if (!isPNG && !isJPEG && !isWebP) {
-        console.error(`❌ ${modelName} response does not appear to be a valid image format`);
+      
+      if (!isPNG && !isJPEG) {
+        console.error(`❌ ${modelName} response is not a valid image format`);
         console.error(`📊 First 16 bytes:`, Array.from(uint8Array.slice(0, 16)).map(b => '0x' + b.toString(16).padStart(2, '0')).join(' '));
         return { success: false, error: "Invalid image format returned" };
       }
@@ -87,7 +87,6 @@ async function tryModelWithRetry(modelUrl: string, modelName: string, fileBuffer
       if (attempt === maxRetries) {
         return { success: false, error: error.message };
       }
-      // Wait before retry
       await delay(1000 * attempt);
     }
   }
@@ -96,7 +95,6 @@ async function tryModelWithRetry(modelUrl: string, modelName: string, fileBuffer
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
@@ -123,7 +121,6 @@ serve(async (req) => {
       )
     }
 
-    // If user wants to skip background removal, return original
     if (skipBackgroundRemoval) {
       console.log('⏭️ Skipping background removal as requested')
       const originalBuffer = await file.arrayBuffer()
@@ -151,29 +148,26 @@ serve(async (req) => {
     }
 
     console.log('🎯 Processing background removal for file:', file.name, 'Size:', file.size, 'Type:', file.type)
-    console.log('🔑 Using API key (first 8 chars):', hfApiKey.substring(0, 8) + '...')
 
-    // Convert file to ArrayBuffer for the request
     const fileBuffer = await file.arrayBuffer()
     console.log('📦 File buffer created, size:', fileBuffer.byteLength)
     
-    // List of models to try (verified working models)
+    // Updated models - using verified working endpoints
     const models = [
       {
-        name: "RMBG-1.4",
-        url: "https://api-inference.huggingface.co/models/briaai/RMBG-1.4"
+        name: "danielgatis/rembg-new",
+        url: "https://api-inference.huggingface.co/models/danielgatis/rembg-new"
       },
       {
-        name: "Background Removal",
-        url: "https://api-inference.huggingface.co/models/silueta/background-removal"
+        name: "danielgatis/rembg",
+        url: "https://api-inference.huggingface.co/models/danielgatis/rembg"
       },
       {
-        name: "U2Net",
-        url: "https://api-inference.huggingface.co/models/skytnt/u2net"
+        name: "Xenova/modnet",
+        url: "https://api-inference.huggingface.co/models/Xenova/modnet"
       }
     ];
 
-    // Try each model in sequence
     for (const model of models) {
       const attempt: ModelAttempt = {
         name: model.name,
@@ -193,14 +187,17 @@ serve(async (req) => {
           headers: {
             ...corsHeaders,
             "Content-Type": "image/png",
-            "X-Model-Used": model.name
+            "X-Model-Used": model.name,
+            "X-Debug-Info": debugMode ? JSON.stringify({ attempts }) : undefined
           }
         });
       }
     }
 
-    // All models failed - return original image as fallback
+    // All models failed - return original as fallback
     console.log('🔄 All models failed, returning original image as fallback');
+    console.log('📊 Debug info:', JSON.stringify(attempts, null, 2));
+    
     const originalBuffer = await file.arrayBuffer();
     
     return new Response(originalBuffer, {
