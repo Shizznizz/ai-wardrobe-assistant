@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -87,29 +88,56 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
       formData.append('file', file);
       formData.append('skipBackgroundRemoval', skipBackgroundRemoval.toString());
 
-      const { data: backgroundRemovedBlob, error } = await supabase.functions.invoke('remove-background', {
+      const response = await supabase.functions.invoke('remove-background', {
         body: formData,
       });
 
-      if (error) {
-        console.error('Background removal failed:', error);
+      if (response.error) {
+        console.error('Background removal failed:', response.error);
         toast.warning('Background removal failed, using original image');
         return;
       }
 
-      if (backgroundRemovedBlob) {
-        // Convert the response to a blob and then to data URL
-        const blob = new Blob([backgroundRemovedBlob], { type: 'image/png' });
-        const backgroundRemovedReader = new FileReader();
-        backgroundRemovedReader.onload = () => {
-          setImagePreview(backgroundRemovedReader.result as string);
-          toast.success('Background removed successfully!');
-        };
-        backgroundRemovedReader.readAsDataURL(blob);
+      if (response.data) {
+        // Check if response.data is already a Blob or needs to be converted
+        let blob;
+        if (response.data instanceof Blob) {
+          blob = response.data;
+        } else if (response.data instanceof ArrayBuffer) {
+          blob = new Blob([response.data], { type: 'image/png' });
+        } else if (typeof response.data === 'string') {
+          // If it's a base64 string, convert it
+          const base64Data = response.data.startsWith('data:') ? response.data.split(',')[1] : response.data;
+          const binaryString = atob(base64Data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          blob = new Blob([bytes], { type: 'image/png' });
+        } else {
+          // Assume it's an object that needs to be converted to ArrayBuffer
+          const arrayBuffer = new Uint8Array(Object.values(response.data as any));
+          blob = new Blob([arrayBuffer], { type: 'image/png' });
+        }
+
+        // Validate that we have a valid blob
+        if (blob.size === 0) {
+          console.error('Received empty blob from background removal');
+          toast.warning('Background removal failed, using original image');
+          return;
+        }
+
+        // Create object URL for preview
+        const objectUrl = URL.createObjectURL(blob);
+        setImagePreview(objectUrl);
+        toast.success('Background removed successfully!');
         
         // Update the file reference to the processed image
         const processedFile = new File([blob], `${file.name.split('.')[0]}_nobg.png`, { type: 'image/png' });
         setImageFile(processedFile);
+
+        // Clean up the object URL when component unmounts or image changes
+        return () => URL.revokeObjectURL(objectUrl);
       }
     } catch (error) {
       console.error('Background removal error:', error);
