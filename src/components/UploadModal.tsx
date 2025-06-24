@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Camera, AlertCircle, Wand2, Settings } from 'lucide-react';
+import { Camera, AlertCircle, Wand2, Settings, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { ClothingType, ClothingColor, ClothingMaterial, ClothingSeason, ClothingOccasion } from '@/lib/types';
 import ImageUploader from './wardrobe/ImageUploader';
@@ -39,6 +39,9 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
   const [attemptedSubmit, setAttemptedSubmit] = useState(false);
   const [isRemovingBackground, setIsRemovingBackground] = useState(false);
   const [skipBackgroundRemoval, setSkipBackgroundRemoval] = useState(false);
+  const [backgroundRemovalFailed, setBackgroundRemovalFailed] = useState(false);
+  const [lastUsedModel, setLastUsedModel] = useState<string>('');
+  const [debugMode, setDebugMode] = useState(false);
 
   const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
   const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
@@ -51,6 +54,98 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
       setValidationErrors(errors);
     }
   }, [name, type, color, material, seasons, imagePreview, attemptedSubmit]);
+
+  const processBackgroundRemoval = async (file: File, isRetry = false) => {
+    try {
+      setIsRemovingBackground(true);
+      setBackgroundRemovalFailed(false);
+      
+      if (!isRetry) {
+        toast.info('Removing background...');
+      } else {
+        toast.info('Retrying background removal...');
+      }
+      
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('skipBackgroundRemoval', skipBackgroundRemoval.toString());
+      formData.append('debugMode', debugMode.toString());
+
+      const response = await supabase.functions.invoke('remove-background', {
+        body: formData,
+      });
+
+      if (response.error) {
+        console.error('Background removal failed:', response.error);
+        setBackgroundRemovalFailed(true);
+        toast.warning('Background removal failed, using original image');
+        return;
+      }
+
+      // Check response headers for debug info
+      const modelUsed = response.data?.headers?.['X-Model-Used'];
+      const backgroundRemovalStatus = response.data?.headers?.['X-Background-Removal'];
+      const debugInfo = response.data?.headers?.['X-Debug-Info'];
+
+      if (modelUsed) {
+        setLastUsedModel(modelUsed);
+        console.log('✅ Background removal successful using:', modelUsed);
+      }
+
+      if (debugMode && debugInfo) {
+        console.log('🐛 Debug info:', debugInfo);
+      }
+
+      if (backgroundRemovalStatus === 'failed') {
+        setBackgroundRemovalFailed(true);
+        toast.warning('Background removal failed, using original image');
+        return;
+      }
+
+      if (response.data) {
+        // Handle the response data properly
+        let blob;
+        
+        // Check if it's already a Blob
+        if (response.data instanceof Blob) {
+          blob = response.data;
+        } else if (response.data instanceof ArrayBuffer) {
+          blob = new Blob([response.data], { type: 'image/png' });
+        } else {
+          // If it's neither, try to convert from the response
+          const arrayBuffer = new Uint8Array(response.data);
+          blob = new Blob([arrayBuffer], { type: 'image/png' });
+        }
+
+        // Validate that we have a valid blob
+        if (blob.size === 0) {
+          console.error('Received empty blob from background removal');
+          setBackgroundRemovalFailed(true);
+          toast.warning('Background removal failed, using original image');
+          return;
+        }
+
+        // Create object URL for preview
+        const objectUrl = URL.createObjectURL(blob);
+        setImagePreview(objectUrl);
+        setBackgroundRemovalFailed(false);
+        toast.success(`Background removed successfully! (${modelUsed || 'Model used'})`);
+        
+        // Update the file reference to the processed image
+        const processedFile = new File([blob], `${file.name.split('.')[0]}_nobg.png`, { type: 'image/png' });
+        setImageFile(processedFile);
+
+        // Clean up the object URL when component unmounts or image changes
+        return () => URL.revokeObjectURL(objectUrl);
+      }
+    } catch (error) {
+      console.error('Background removal error:', error);
+      setBackgroundRemovalFailed(true);
+      toast.warning('Background removal failed, using original image');
+    } finally {
+      setIsRemovingBackground(false);
+    }
+  };
 
   const handleImageChange = async (file: File) => {
     // Validate file type
@@ -80,76 +175,20 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
     }
 
     // Then try to remove background
-    try {
-      setIsRemovingBackground(true);
-      toast.info('Removing background...');
-      
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('skipBackgroundRemoval', skipBackgroundRemoval.toString());
+    await processBackgroundRemoval(file);
+  };
 
-      const response = await supabase.functions.invoke('remove-background', {
-        body: formData,
-      });
-
-      if (response.error) {
-        console.error('Background removal failed:', response.error);
-        toast.warning('Background removal failed, using original image');
-        return;
-      }
-
-      if (response.data) {
-        // Check if response.data is already a Blob or needs to be converted
-        let blob;
-        if (response.data instanceof Blob) {
-          blob = response.data;
-        } else if (response.data instanceof ArrayBuffer) {
-          blob = new Blob([response.data], { type: 'image/png' });
-        } else if (typeof response.data === 'string') {
-          // If it's a base64 string, convert it
-          const base64Data = response.data.startsWith('data:') ? response.data.split(',')[1] : response.data;
-          const binaryString = atob(base64Data);
-          const bytes = new Uint8Array(binaryString.length);
-          for (let i = 0; i < binaryString.length; i++) {
-            bytes[i] = binaryString.charCodeAt(i);
-          }
-          blob = new Blob([bytes], { type: 'image/png' });
-        } else {
-          // Assume it's an object that needs to be converted to ArrayBuffer
-          const arrayBuffer = new Uint8Array(Object.values(response.data as any));
-          blob = new Blob([arrayBuffer], { type: 'image/png' });
-        }
-
-        // Validate that we have a valid blob
-        if (blob.size === 0) {
-          console.error('Received empty blob from background removal');
-          toast.warning('Background removal failed, using original image');
-          return;
-        }
-
-        // Create object URL for preview
-        const objectUrl = URL.createObjectURL(blob);
-        setImagePreview(objectUrl);
-        toast.success('Background removed successfully!');
-        
-        // Update the file reference to the processed image
-        const processedFile = new File([blob], `${file.name.split('.')[0]}_nobg.png`, { type: 'image/png' });
-        setImageFile(processedFile);
-
-        // Clean up the object URL when component unmounts or image changes
-        return () => URL.revokeObjectURL(objectUrl);
-      }
-    } catch (error) {
-      console.error('Background removal error:', error);
-      toast.warning('Background removal failed, using original image');
-    } finally {
-      setIsRemovingBackground(false);
+  const handleRetryBackgroundRemoval = async () => {
+    if (imageFile) {
+      await processBackgroundRemoval(imageFile, true);
     }
   };
 
   const clearImage = () => {
     setImagePreview(null);
     setImageFile(null);
+    setBackgroundRemovalFailed(false);
+    setLastUsedModel('');
   };
 
   const toggleSeason = (season: ClothingSeason) => {
@@ -270,6 +309,8 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
     setImageFile(null);
     setValidationErrors([]);
     setAttemptedSubmit(false);
+    setBackgroundRemovalFailed(false);
+    setLastUsedModel('');
   };
 
   return (
@@ -309,19 +350,54 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
         
         <ScrollArea className="max-h-[calc(90vh-180px)]">
           <form onSubmit={handleSubmit} className="space-y-4 py-2 px-1">
-            {/* Background Removal Toggle */}
-            <div className="flex items-center justify-between p-3 bg-slate-800/50 rounded-lg">
-              <div className="flex items-center space-x-2">
-                <Settings className="h-4 w-4 text-purple-400" />
-                <Label htmlFor="skip-bg-removal" className="text-sm text-white">
-                  Skip background removal
-                </Label>
+            {/* Background Removal Controls */}
+            <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Settings className="h-4 w-4 text-purple-400" />
+                  <Label htmlFor="skip-bg-removal" className="text-sm text-white">
+                    Skip background removal
+                  </Label>
+                </div>
+                <Switch
+                  id="skip-bg-removal"
+                  checked={skipBackgroundRemoval}
+                  onCheckedChange={setSkipBackgroundRemoval}
+                />
               </div>
-              <Switch
-                id="skip-bg-removal"
-                checked={skipBackgroundRemoval}
-                onCheckedChange={setSkipBackgroundRemoval}
-              />
+              
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Label htmlFor="debug-mode" className="text-sm text-white">
+                    Debug mode
+                  </Label>
+                </div>
+                <Switch
+                  id="debug-mode"
+                  checked={debugMode}
+                  onCheckedChange={setDebugMode}
+                />
+              </div>
+
+              {lastUsedModel && (
+                <div className="text-xs text-green-400">
+                  ✅ Last successful model: {lastUsedModel}
+                </div>
+              )}
+
+              {backgroundRemovalFailed && imageFile && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRetryBackgroundRemoval}
+                  disabled={isRemovingBackground}
+                  className="w-full bg-transparent border-orange-500/30 text-orange-300 hover:bg-orange-500/10"
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isRemovingBackground ? 'animate-spin' : ''}`} />
+                  Retry Background Removal
+                </Button>
+              )}
             </div>
 
             <div className="relative">
