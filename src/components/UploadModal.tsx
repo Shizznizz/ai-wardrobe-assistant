@@ -2,18 +2,19 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Camera, AlertCircle, Wand2, Settings, RefreshCw } from 'lucide-react';
+import { Camera, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { ClothingType, ClothingColor, ClothingMaterial, ClothingSeason, ClothingOccasion } from '@/lib/types';
+import { ClothingType, ClothingColor, ClothingMaterial, ClothingSeason } from '@/lib/types';
 import ImageUploader from './wardrobe/ImageUploader';
 import ClothingDetailsForm from './wardrobe/ClothingDetailsForm';
+import ImagePreviewSection from './wardrobe/ImagePreviewSection';
+import BackgroundRemovalControls from './wardrobe/BackgroundRemovalControls';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
+import { convertFileToBase64, isValidImageType, formatFileSize } from '@/utils/imageProcessing';
+import { removeBackground, BackgroundRemovalResult } from '@/utils/backgroundRemoval';
 
 interface UploadModalProps {
   onUpload: (item: any) => void;
@@ -21,151 +22,120 @@ interface UploadModalProps {
   children?: React.ReactNode;
 }
 
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+
 const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModalProps) => {
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
+  
+  // Modal state
   const [open, setOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
+
+  // Form data
   const [name, setName] = useState('');
   const [type, setType] = useState<ClothingType | ''>('');
   const [color, setColor] = useState<ClothingColor | ''>('');
   const [material, setMaterial] = useState<ClothingMaterial | ''>('');
   const [seasons, setSeasons] = useState<ClothingSeason[]>([]);
   const [favorite, setFavorite] = useState(false);
+
+  // Image processing state
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageFile, setImageFile] = useState<File | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [attemptedSubmit, setAttemptedSubmit] = useState(false);
-  const [isRemovingBackground, setIsRemovingBackground] = useState(false);
-  const [skipBackgroundRemoval, setSkipBackgroundRemoval] = useState(false);
+  const [isProcessingBackground, setIsProcessingBackground] = useState(false);
   const [backgroundRemovalFailed, setBackgroundRemovalFailed] = useState(false);
   const [lastUsedModel, setLastUsedModel] = useState<string>('');
-  const [debugMode, setDebugMode] = useState(false);
 
-  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-  const ALLOWED_FILE_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+  // Settings
+  const [skipBackgroundRemoval, setSkipBackgroundRemoval] = useState(false);
+  const [debugMode, setDebugMode] = useState(false);
 
   // Reset validation errors when form fields change
   useEffect(() => {
     if (attemptedSubmit) {
-      // Only validate again if user has attempted to submit once
       const errors = validateForm();
       setValidationErrors(errors);
     }
   }, [name, type, color, material, seasons, imagePreview, attemptedSubmit]);
 
-  const convertFileToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => {
-        const result = reader.result as string;
-        resolve(result);
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
-  const processBackgroundRemoval = async (file: File, isRetry = false) => {
-    try {
-      setIsRemovingBackground(true);
-      setBackgroundRemovalFailed(false);
-      
-      if (!isRetry) {
-        toast.info('Removing background...');
-      } else {
-        toast.info('Retrying background removal...');
-      }
-      
-      // Convert file to base64
-      const imageBase64 = await convertFileToBase64(file);
-      
-      if (debugMode) {
-        console.log('🔍 Debug: Sending image to background removal, size:', imageBase64.length);
-      }
-
-      const response = await supabase.functions.invoke('remove-background', {
-        body: JSON.stringify({ imageBase64 }),
-      });
-
-      if (debugMode) {
-        console.log('🔍 Debug: Background removal response:', response);
-      }
-
-      if (response.error) {
-        console.error('Background removal failed:', response.error);
-        setBackgroundRemovalFailed(true);
-        toast.info("Couldn't remove background. The original image has been added instead.");
-        return;
-      }
-
-      // Handle successful response
-      if (response.data && response.data.resultBase64) {
-        const resultBase64 = response.data.resultBase64;
-        
-        if (debugMode) {
-          console.log('🔍 Debug: Received processed image, size:', resultBase64.length);
-        }
-
-        setImagePreview(resultBase64);
-        setBackgroundRemovalFailed(false);
-        setLastUsedModel('briaai/RMBG-1.4');
-        toast.success('Background removed successfully!');
-        
-        // Convert base64 back to File for consistency
-        const response_blob = await fetch(resultBase64).then(r => r.blob());
-        const processedFile = new File([response_blob], `${file.name.split('.')[0]}_nobg.png`, { type: 'image/png' });
-        setImageFile(processedFile);
-      } else {
-        console.error('Invalid response format from background removal');
-        setBackgroundRemovalFailed(true);
-        toast.info("Couldn't remove background. The original image has been added instead.");
-      }
-    } catch (error) {
-      console.error('Background removal error:', error);
-      setBackgroundRemovalFailed(true);
-      toast.info("Couldn't remove background. The original image has been added instead.");
-    } finally {
-      setIsRemovingBackground(false);
-    }
-  };
-
   const handleImageChange = async (file: File) => {
     // Validate file type
-    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
-      toast.error('Invalid file type. Please upload a PNG, JPG, JPEG, WEBP, or GIF image.');
+    if (!isValidImageType(file)) {
+      toast.error('Invalid file type. Please upload a PNG, JPG, JPEG, or WEBP image.');
       return;
     }
 
     // Validate file size
     if (file.size > MAX_FILE_SIZE) {
-      toast.error(`File size too large. Maximum allowed size is ${MAX_FILE_SIZE / (1024 * 1024)}MB.`);
+      toast.error(`File size too large. Maximum allowed size is ${formatFileSize(MAX_FILE_SIZE)}.`);
       return;
     }
 
-    // First set the original image
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImagePreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
-    setImageFile(file);
+    // Set the original image immediately
+    try {
+      const originalBase64 = await convertFileToBase64(file);
+      setImagePreview(originalBase64);
+      setImageFile(file);
+      setBackgroundRemovalFailed(false);
+      setLastUsedModel('');
 
-    // Skip background removal if user opted out
-    if (skipBackgroundRemoval) {
-      toast.info('Background removal skipped');
-      return;
+      // Skip background removal if user opted out
+      if (skipBackgroundRemoval) {
+        toast.info('Background removal skipped');
+        return;
+      }
+
+      // Process background removal
+      await processBackgroundRemoval(originalBase64);
+    } catch (error) {
+      console.error('Error processing image:', error);
+      toast.error('Error processing image. Please try again.');
     }
+  };
 
-    // Then try to remove background
-    await processBackgroundRemoval(file);
+  const processBackgroundRemoval = async (imageBase64: string) => {
+    setIsProcessingBackground(true);
+    setBackgroundRemovalFailed(false);
+
+    const result: BackgroundRemovalResult = await removeBackground(imageBase64, {
+      debugMode,
+      onProgress: (message) => {
+        if (debugMode) {
+          console.log('Background removal progress:', message);
+        }
+      }
+    });
+
+    setIsProcessingBackground(false);
+
+    if (result.success && result.resultBase64) {
+      setImagePreview(result.resultBase64);
+      setLastUsedModel('briaai/RMBG-1.4');
+      toast.success('Background removed successfully!');
+      
+      // Update the file reference for consistency
+      try {
+        const response = await fetch(result.resultBase64);
+        const blob = await response.blob();
+        const processedFile = new File([blob], `${imageFile?.name.split('.')[0] || 'image'}_nobg.png`, { 
+          type: 'image/png' 
+        });
+        setImageFile(processedFile);
+      } catch (error) {
+        console.error('Error creating processed file:', error);
+      }
+    } else {
+      setBackgroundRemovalFailed(true);
+      toast.info("Couldn't remove background. The original image has been added instead.");
+    }
   };
 
   const handleRetryBackgroundRemoval = async () => {
-    if (imageFile) {
-      await processBackgroundRemoval(imageFile, true);
-    }
+    if (!imagePreview) return;
+    await processBackgroundRemoval(imagePreview);
   };
 
   const clearImage = () => {
@@ -186,18 +156,15 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
   const validateForm = (): string[] => {
     const errors: string[] = [];
 
-    // Check if user is authenticated
     if (!isAuthenticated) {
       errors.push("You need to be logged in to add items");
       return errors;
     }
 
-    // Check for special characters in name (alphanumeric, spaces, and basic punctuation allowed)
     if (name && !/^[a-zA-Z0-9\s.,'-]*$/.test(name)) {
       errors.push("Name contains invalid characters. Please use only letters, numbers, and basic punctuation.");
     }
 
-    // Required fields check
     if (!name) errors.push("Name is required");
     if (!type) errors.push("Category is required");
     if (!imagePreview) errors.push("Image is required");
@@ -211,7 +178,7 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
   const handleOpenChange = (newOpen: boolean) => {
     if (!isAuthenticated && newOpen) {
       toast.error("Please log in to add items to your wardrobe");
-      navigate("/login"); // Redirect to login page
+      navigate("/login");
       return;
     }
     
@@ -231,10 +198,7 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
       return;
     }
     
-    // Set flag to show validations as user edits
     setAttemptedSubmit(true);
-    
-    // Validate form
     const errors = validateForm();
     setValidationErrors(errors);
     
@@ -242,35 +206,27 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
       return;
     }
 
-    // Clear previous errors
     setValidationErrors([]);
     setIsSubmitting(true);
-    setIsLoading(true);
     
     try {
-      // Default occasions
-      const defaultOccasions: ClothingOccasion[] = ['casual'];
-      
-      // Create new item
       const newItem = {
-        id: Date.now().toString(), // This ID will be overridden by Supabase
+        id: Date.now().toString(),
         name,
         type,
         color,
         material,
         season: seasons,
-        seasons: seasons, // For compatibility
+        seasons: seasons,
         image: imagePreview,
         imageUrl: imagePreview,
         favorite,
         timesWorn: 0,
-        occasions: defaultOccasions,
+        occasions: ['casual'],
         dateAdded: new Date()
       };
       
       onUpload(newItem);
-      
-      // Reset form
       resetForm();
       setOpen(false);
     } catch (error) {
@@ -278,7 +234,6 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
       toast.error('Error adding item. Please try again.');
     } finally {
       setIsSubmitting(false);
-      setIsLoading(false);
     }
   };
 
@@ -295,13 +250,13 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
     setAttemptedSubmit(false);
     setBackgroundRemovalFailed(false);
     setLastUsedModel('');
+    setIsProcessingBackground(false);
   };
 
+  const isFormDisabled = isSubmitting || isProcessingBackground;
+
   return (
-    <Dialog 
-      open={open} 
-      onOpenChange={handleOpenChange}
-    >
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         {children || (
           <Button className="space-x-2 group">
@@ -333,73 +288,31 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
         )}
         
         <ScrollArea className="max-h-[calc(90vh-180px)]">
-          <form onSubmit={handleSubmit} className="space-y-4 py-2 px-1">
-            {/* Background Removal Controls */}
-            <div className="space-y-3 p-3 bg-slate-800/50 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Settings className="h-4 w-4 text-purple-400" />
-                  <Label htmlFor="skip-bg-removal" className="text-sm text-white">
-                    Skip background removal
-                  </Label>
-                </div>
-                <Switch
-                  id="skip-bg-removal"
-                  checked={skipBackgroundRemoval}
-                  onCheckedChange={setSkipBackgroundRemoval}
-                />
-              </div>
-              
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Label htmlFor="debug-mode" className="text-sm text-white">
-                    Debug mode
-                  </Label>
-                </div>
-                <Switch
-                  id="debug-mode"
-                  checked={debugMode}
-                  onCheckedChange={setDebugMode}
-                />
-              </div>
+          <form onSubmit={handleSubmit} className="space-y-6 py-2 px-1">
+            <BackgroundRemovalControls
+              skipBackgroundRemoval={skipBackgroundRemoval}
+              onSkipChange={setSkipBackgroundRemoval}
+              debugMode={debugMode}
+              onDebugChange={setDebugMode}
+              lastUsedModel={lastUsedModel}
+            />
 
-              {lastUsedModel && (
-                <div className="text-xs text-green-400">
-                  ✅ Background removed with: {lastUsedModel}
-                </div>
-              )}
-
-              {backgroundRemovalFailed && imageFile && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRetryBackgroundRemoval}
-                  disabled={isRemovingBackground}
-                  className="w-full bg-transparent border-orange-500/30 text-orange-300 hover:bg-orange-500/10"
-                >
-                  <RefreshCw className={`h-4 w-4 mr-2 ${isRemovingBackground ? 'animate-spin' : ''}`} />
-                  Retry Background Removal
-                </Button>
-              )}
-            </div>
-
-            <div className="relative">
+            {!imagePreview ? (
               <ImageUploader 
                 imagePreview={imagePreview}
                 onImageChange={handleImageChange}
                 onClearImage={clearImage}
-                label="Upload an image (PNG, JPG, JPEG, WEBP, or GIF, max 10MB)"
+                label="Upload an image (PNG, JPG, JPEG, or WEBP, max 10MB)"
               />
-              {isRemovingBackground && (
-                <div className="absolute inset-0 bg-black/50 flex items-center justify-center rounded-lg">
-                  <div className="flex items-center gap-2 text-white">
-                    <Wand2 className="h-4 w-4 animate-spin" />
-                    <span className="text-sm">Removing background...</span>
-                  </div>
-                </div>
-              )}
-            </div>
+            ) : (
+              <ImagePreviewSection
+                imagePreview={imagePreview}
+                isProcessing={isProcessingBackground}
+                backgroundRemovalFailed={backgroundRemovalFailed}
+                onClearImage={clearImage}
+                onRetryBackgroundRemoval={handleRetryBackgroundRemoval}
+              />
+            )}
 
             <ClothingDetailsForm
               name={name}
@@ -426,6 +339,7 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
               resetForm();
               setOpen(false);
             }}
+            disabled={isFormDisabled}
             className="bg-transparent border-slate-600 text-white hover:bg-slate-800"
           >
             Cancel
@@ -433,10 +347,10 @@ const UploadModal = ({ onUpload, buttonText = "Add Item", children }: UploadModa
           <Button 
             type="button" 
             onClick={handleSubmit}
-            disabled={isSubmitting || isLoading || isRemovingBackground}
+            disabled={isFormDisabled}
             className="relative bg-blue-600 hover:bg-blue-700 text-white"
           >
-            {isSubmitting || isLoading || isRemovingBackground ? (
+            {isFormDisabled ? (
               <>
                 <span className="opacity-0">Adding...</span>
                 <span className="absolute inset-0 flex items-center justify-center">
