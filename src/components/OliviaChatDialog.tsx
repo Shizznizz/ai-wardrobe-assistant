@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
 import OutfitFeedbackRating from './chat/OutfitFeedbackRating';
+import DailySuggestionsWidget from './olivia/DailySuggestionsWidget';
 
 interface Message {
   role: 'assistant' | 'user';
@@ -215,9 +216,12 @@ const OliviaChatDialog = ({ isOpen, onClose, initialMessage = "Hi! I'm Olivia Bl
   };
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
+    <>
+      <DailySuggestionsWidget />
+      
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
           initial={{ opacity: 0, y: 20, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 20, scale: 0.9 }}
@@ -373,6 +377,7 @@ const OliviaChatDialog = ({ isOpen, onClose, initialMessage = "Hi! I'm Olivia Bl
         </motion.div>
       )}
     </AnimatePresence>
+    </>
   );
 };
 

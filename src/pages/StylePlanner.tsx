@@ -14,6 +14,7 @@ import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Toolti
 import { useIsMobile } from '@/hooks/use-mobile';
 import CollapsibleOliviaSection from '@/components/outfits/CollapsibleOliviaSection';
 import MissedOpportunitiesSection from '@/components/outfits/calendar/MissedOpportunitiesSection';
+import SmartRemindersPanel from '@/components/olivia/SmartRemindersPanel';
 
 const StylePlanner = () => {
   const { outfits, clothingItems, outfitLogs, addOutfitLog, loading } = useOutfitContext();
@@ -94,6 +95,17 @@ const StylePlanner = () => {
         </motion.div>
       </section>
       
+      {/* Smart Reminders */}
+      <section className="container mx-auto px-4 py-6">
+        <motion.div
+          initial={{ opacity: 0, y: 40 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25, duration: 0.5 }}
+        >
+          <SmartRemindersPanel />
+        </motion.div>
+      </section>
+
       {/* Enhanced Olivia Chat Section */}
       <section className="container mx-auto px-4 py-6">
         <motion.div

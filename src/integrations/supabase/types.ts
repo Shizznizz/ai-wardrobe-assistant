@@ -205,6 +205,48 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_suggestions: {
+        Row: {
+          activity_context: string | null
+          created_at: string
+          id: string
+          outfit_ids: string[]
+          reasoning: string | null
+          suggestion_date: string
+          updated_at: string
+          user_id: string
+          was_accepted: boolean | null
+          was_viewed: boolean | null
+          weather_context: Json | null
+        }
+        Insert: {
+          activity_context?: string | null
+          created_at?: string
+          id?: string
+          outfit_ids?: string[]
+          reasoning?: string | null
+          suggestion_date: string
+          updated_at?: string
+          user_id: string
+          was_accepted?: boolean | null
+          was_viewed?: boolean | null
+          weather_context?: Json | null
+        }
+        Update: {
+          activity_context?: string | null
+          created_at?: string
+          id?: string
+          outfit_ids?: string[]
+          reasoning?: string | null
+          suggestion_date?: string
+          updated_at?: string
+          user_id?: string
+          was_accepted?: boolean | null
+          was_viewed?: boolean | null
+          weather_context?: Json | null
+        }
+        Relationships: []
+      }
       fashion_trends: {
         Row: {
           colors: string[] | null
@@ -522,6 +564,45 @@ export type Database = {
           quiz_type?: string
           result_data?: Json
           updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      smart_reminders: {
+        Row: {
+          created_at: string
+          dismissed: boolean | null
+          expires_at: string | null
+          id: string
+          item_id: string | null
+          message: string
+          outfit_id: string | null
+          priority: number | null
+          reminder_type: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dismissed?: boolean | null
+          expires_at?: string | null
+          id?: string
+          item_id?: string | null
+          message: string
+          outfit_id?: string | null
+          priority?: number | null
+          reminder_type: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dismissed?: boolean | null
+          expires_at?: string | null
+          id?: string
+          item_id?: string | null
+          message?: string
+          outfit_id?: string | null
+          priority?: number | null
+          reminder_type?: string
           user_id?: string
         }
         Relationships: []

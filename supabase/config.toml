@@ -47,3 +47,7 @@ verify_jwt = false
 [[edge_functions]]
 path = "get-trending-outfits"
 verify_jwt = false
+
+[[edge_functions]]
+path = "generate-daily-suggestions"
+verify_jwt = false
