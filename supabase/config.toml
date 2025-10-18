@@ -25,6 +25,18 @@ port = 54323
 api_url = "http://localhost"
 
 [[edge_functions]]
+path = "chat-with-olivia"
+verify_jwt = false
+
+[[edge_functions]]
+path = "analyze-user-patterns"
+verify_jwt = false
+
+[[edge_functions]]
+path = "save-outfit-feedback"
+verify_jwt = false
+
+[[edge_functions]]
 path = "generate-seasonal-outfits"
 verify_jwt = false
 

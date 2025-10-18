@@ -8,10 +8,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate } from 'react-router-dom';
+import OutfitFeedbackRating from './chat/OutfitFeedbackRating';
 
 interface Message {
   role: 'assistant' | 'user';
   content: string;
+  id?: string;
+  needsFeedback?: boolean;
 }
 
 interface OliviaChatDialogProps {
@@ -22,13 +25,14 @@ interface OliviaChatDialogProps {
 
 const OliviaChatDialog = ({ isOpen, onClose, initialMessage = "Hi! I'm Olivia Bloom, your personal style assistant. How can I help with your fashion needs today? The first 5 messages are free, after which you'll need a premium account to continue chatting." }: OliviaChatDialogProps) => {
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: initialMessage }
+    { role: 'assistant', content: initialMessage, id: 'initial', needsFeedback: false }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [messageCount, setMessageCount] = useState(0);
   const [limitReached, setLimitReached] = useState(false);
+  const [feedbackGivenFor, setFeedbackGivenFor] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const { toast } = useToast();
@@ -132,7 +136,11 @@ const OliviaChatDialog = ({ isOpen, onClose, initialMessage = "Hi! I'm Olivia Bl
     }
     
     // Add user message to chat
-    const userMessage = { role: 'user' as const, content: input.trim() };
+    const userMessage: Message = { 
+      role: 'user' as const, 
+      content: input.trim(),
+      id: `user-${Date.now()}`
+    };
     setMessages(prevMessages => [...prevMessages, userMessage]);
     setInput('');
     setIsLoading(true);
@@ -245,24 +253,43 @@ const OliviaChatDialog = ({ isOpen, onClose, initialMessage = "Hi! I'm Olivia Bl
           <div className="flex-1 p-4 overflow-y-auto flex flex-col space-y-4 bg-gray-50 dark:bg-slate-950">
             {messages.map((message, index) => (
               <div
-                key={index}
-                className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                key={message.id || index}
+                className={`flex flex-col ${message.role === 'user' ? 'items-end' : 'items-start'}`}
               >
-                {message.role === 'assistant' && (
-                  <Avatar className="h-8 w-8 mr-2 mt-1 flex-shrink-0">
-                    <AvatarImage src="/lovable-uploads/86bf74b8-b311-4e3c-bfd6-53819add3df8.png" alt="Olivia Bloom" />
-                    <AvatarFallback className="bg-purple-200 text-purple-700">OB</AvatarFallback>
-                  </Avatar>
-                )}
-                <div
-                  className={`max-w-[80%] p-3 rounded-lg ${
-                    message.role === 'user'
-                      ? 'bg-purple-600 text-white rounded-tr-none'
-                      : 'bg-white dark:bg-slate-800 dark:text-white border border-gray-200 dark:border-slate-700 rounded-tl-none'
-                  }`}
-                >
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                <div className="flex">
+                  {message.role === 'assistant' && (
+                    <Avatar className="h-8 w-8 mr-2 mt-1 flex-shrink-0">
+                      <AvatarImage src="/lovable-uploads/86bf74b8-b311-4e3c-bfd6-53819add3df8.png" alt="Olivia Bloom" />
+                      <AvatarFallback className="bg-purple-200 text-purple-700">OB</AvatarFallback>
+                    </Avatar>
+                  )}
+                  <div
+                    className={`max-w-[80%] p-3 rounded-lg ${
+                      message.role === 'user'
+                        ? 'bg-purple-600 text-white rounded-tr-none'
+                        : 'bg-white dark:bg-slate-800 dark:text-white border border-gray-200 dark:border-slate-700 rounded-tl-none'
+                    }`}
+                  >
+                    <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                  </div>
                 </div>
+                
+                {/* Feedback Rating for assistant messages */}
+                {message.role === 'assistant' && 
+                 message.needsFeedback && 
+                 message.id && 
+                 !feedbackGivenFor.has(message.id) && 
+                 index === messages.length - 1 && 
+                 !isLoading && (
+                  <div className="ml-10 w-[calc(80%-2.5rem)]">
+                    <OutfitFeedbackRating
+                      messageId={message.id}
+                      onFeedbackSubmitted={() => {
+                        setFeedbackGivenFor(prev => new Set(prev).add(message.id!));
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             ))}
             {isLoading && (
