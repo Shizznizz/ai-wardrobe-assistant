@@ -205,6 +205,45 @@ export type Database = {
         }
         Relationships: []
       }
+      fashion_trends: {
+        Row: {
+          colors: string[] | null
+          created_at: string
+          description: string
+          id: string
+          key_pieces: string[] | null
+          popularity_score: number | null
+          season: string
+          style_tags: string[] | null
+          trend_name: string
+          updated_at: string
+        }
+        Insert: {
+          colors?: string[] | null
+          created_at?: string
+          description: string
+          id?: string
+          key_pieces?: string[] | null
+          popularity_score?: number | null
+          season: string
+          style_tags?: string[] | null
+          trend_name: string
+          updated_at?: string
+        }
+        Update: {
+          colors?: string[] | null
+          created_at?: string
+          description?: string
+          id?: string
+          key_pieces?: string[] | null
+          popularity_score?: number | null
+          season?: string
+          style_tags?: string[] | null
+          trend_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       olivia_learning_data: {
         Row: {
           context: Json | null

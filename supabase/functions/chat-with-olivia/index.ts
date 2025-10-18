@@ -62,7 +62,23 @@ serve(async (req) => {
       )
     }
 
-    // Fetch user data for context including learning patterns and calendar
+    // Determine current season
+    const now = new Date()
+    const month = now.getMonth() + 1
+    const year = now.getFullYear()
+    let currentSeason = ''
+    
+    if (month >= 3 && month <= 5) {
+      currentSeason = `spring_${year}`
+    } else if (month >= 6 && month <= 8) {
+      currentSeason = `summer_${year}`
+    } else if (month >= 9 && month <= 11) {
+      currentSeason = `fall_${year}`
+    } else {
+      currentSeason = `winter_${year}`
+    }
+
+    // Fetch user data for context including learning patterns, calendar, and fashion trends
     const [
       { data: userPrefs },
       { data: clothingItems },
@@ -70,7 +86,8 @@ serve(async (req) => {
       { data: outfitLogs },
       { data: profile },
       { data: learningData },
-      { data: calendarEvents }
+      { data: calendarEvents },
+      { data: fashionTrends }
     ] = await Promise.all([
       supabaseClient.from('user_preferences').select('*').eq('user_id', userId).maybeSingle(),
       supabaseClient.from('clothing_items').select('*').eq('user_id', userId).order('favorite', { ascending: false }).order('last_worn', { ascending: true, nullsFirst: false }).limit(50),
@@ -78,7 +95,8 @@ serve(async (req) => {
       supabaseClient.from('outfit_logs').select('*').eq('user_id', userId).order('date', { ascending: false }).limit(5),
       supabaseClient.from('profiles').select('first_name, pronouns').eq('id', userId).maybeSingle(),
       supabaseClient.from('olivia_learning_data').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(20),
-      supabaseClient.from('calendar_events').select('*').eq('user_id', userId).gte('date', new Date().toISOString()).order('date', { ascending: true }).limit(5)
+      supabaseClient.from('calendar_events').select('*').eq('user_id', userId).gte('date', new Date().toISOString()).order('date', { ascending: true }).limit(5),
+      supabaseClient.from('fashion_trends').select('*').eq('season', currentSeason).order('popularity_score', { ascending: false }).limit(5)
     ])
 
     // Get live weather if user has location set
@@ -105,14 +123,26 @@ serve(async (req) => {
       }
     }
 
-    // Build enhanced context for Olivia
-    let userContext = `You are Olivia Bloom, the user's personal AI stylist and trusted fashion companion. You are confident, warm, and stylist-grade — think of a Vogue fashion editor and a close friend combined. You know the user's entire wardrobe, favorite colors, style preferences, planned activities, and weather. You suggest outfits based on those factors.
+    // Build enhanced context for Olivia with fashion expertise
+    let userContext = `You are Olivia Bloom, the user's personal AI stylist and trusted fashion companion. You are confident, warm, and stylist-grade — think of a Vogue fashion editor and a close friend combined. 
 
-Use a friendly and playful tone, but with clarity and high fashion vocabulary. Add emojis sparingly, where it adds charm. If the user shares a plan or mood, suggest an outfit without waiting to be asked. Proactively reference their existing outfits and items by name.
+You possess EXPERT FASHION KNOWLEDGE:
+- Current trends and how to style them
+- Color theory and seasonal palettes  
+- Fabric combinations and textures
+- Occasion-appropriate dressing
+- Body type considerations
+- Style movements and fashion history
+
+You know the user's entire wardrobe, favorite colors, style preferences, planned activities, weather, AND current fashion trends. You suggest outfits based on ALL these factors.
+
+Use a friendly and playful tone with high fashion vocabulary. Add emojis sparingly. If the user shares a plan or mood, suggest an outfit without waiting to be asked. Proactively reference their existing outfits and items by name.
+
+When users ask "what is [trend]?" or "explain [style concept]", you educate them and show examples from their own wardrobe.
 
 Avoid generic or repetitive phrases. Every response should feel bespoke and thoughtful.
 
-Here is what you know about this user:\n\n`
+=== YOUR KNOWLEDGE BASE ===\n\n`
     
     // User basic info
     if (profile?.first_name) {
@@ -247,9 +277,32 @@ Here is what you know about this user:\n\n`
       })
     }
 
+    // Current Fashion Trends
+    if (fashionTrends && fashionTrends.length > 0) {
+      userContext += `\n=== CURRENT FASHION TRENDS (${currentSeason.replace('_', ' ').toUpperCase()}) ===\n`
+      fashionTrends.forEach(trend => {
+        userContext += `\n📍 ${trend.trend_name} (${trend.popularity_score}/100 popularity)\n`
+        userContext += `   ${trend.description}\n`
+        
+        if (trend.colors && trend.colors.length > 0) {
+          userContext += `   Key colors: ${trend.colors.join(', ')}\n`
+        }
+        
+        if (trend.key_pieces && trend.key_pieces.length > 0) {
+          userContext += `   Must-have pieces: ${trend.key_pieces.join(', ')}\n`
+        }
+        
+        if (trend.style_tags && trend.style_tags.length > 0) {
+          userContext += `   Style vibe: ${trend.style_tags.join(', ')}\n`
+        }
+      })
+      
+      userContext += `\nIMPORTANT: Reference these trends when relevant to user's style preferences. If they ask about a trend, explain it and show how items in their wardrobe fit the trend!\n`
+    }
+
     // Learning insights
     if (learningData && learningData.length > 0) {
-      userContext += `\n\n=== LEARNED PREFERENCES ===\n`
+      userContext += `\n=== LEARNED PREFERENCES ===\n`
       
       // Analyze high-rated patterns
       const highRated = learningData.filter(d => d.rating >= 4)
@@ -285,48 +338,81 @@ Here is what you know about this user:\n\n`
     }
 
     userContext += `\n\n=== YOUR MISSION ===
-You are their PROACTIVE personal stylist with complete context:
+You are their PROACTIVE personal stylist with COMPLETE fashion intelligence:
+
+📊 Your Data Sources:
 - LIVE weather data (use it!)
 - Upcoming calendar events (suggest for these!)
 - Smart-sorted wardrobe (prioritize favorites and never-worn items)
 - Learned preferences from past feedback
+- CURRENT FASHION TRENDS (reference when relevant!)
 
-When users ask "what should I wear today?" or mention any plans:
+💡 Style Education Mode:
+When users ask about fashion concepts or trends:
+1. Explain the trend clearly and concisely
+2. Share why it's popular right now
+3. Show SPECIFIC examples from their wardrobe that fit the trend
+4. Suggest how they can incorporate it into their style
+
+Example: "Quiet Luxury is about understated elegance - your camel cashmere sweater and tailored navy trousers are PERFECT quiet luxury pieces!"
+
+👗 Outfit Suggestion Mode:
+When users ask "what should I wear today?" or mention plans:
 1. Check their calendar for today/tomorrow events
 2. Consider the CURRENT weather
-3. Suggest outfits using their actual wardrobe items (mention by name)
-4. Explain WHY each piece works (weather + occasion + their style)
-5. Prioritize favorites and items they haven't worn recently
+3. Reference relevant fashion trends
+4. Suggest outfits using their actual wardrobe items (mention by name)
+5. Explain WHY each piece works (weather + occasion + trend + their style)
+6. Prioritize favorites and items they haven't worn recently
 
-Be conversational and proactive. If you see they have an event today, mention it even if they didn't ask!
+Be conversational, proactive, and fashion-savvy. If you see they have an event today, mention it even if they didn't ask!
 
 After suggesting an outfit, always ask: "How does this outfit sound? Would you like me to adjust anything?" to gather more learning data.`
 
-    // Enhanced smart suggestion triggers
+    // Enhanced smart suggestion triggers including style education
     const latestMessage = messages[messages.length - 1]?.content.toLowerCase() || ''
-    const suggestionTriggers = [
+    const outfitTriggers = [
       'today', 'tomorrow', 'tonight', 'what should i wear', 'outfit', 'dress',
       'dinner', 'lunch', 'meeting', 'date', 'party', 'event', 'shopping', 'interview', 'work',
       'weather', 'weekend', 'going to', 'have a', 'attending', 'planning'
     ]
     
-    const shouldSuggestOutfit = suggestionTriggers.some(trigger => latestMessage.includes(trigger))
+    const educationTriggers = [
+      'what is', 'what are', 'explain', 'tell me about', 'how do i', 'how to wear',
+      'trend', 'style', 'fashion', 'look', 'aesthetic'
+    ]
+    
+    const shouldSuggestOutfit = outfitTriggers.some(trigger => latestMessage.includes(trigger))
+    const shouldEducate = educationTriggers.some(trigger => latestMessage.includes(trigger))
+    
+    if (shouldEducate) {
+      userContext += `\n\n📚 EDUCATION MODE ACTIVATED!\n`
+      userContext += `User is asking about a fashion concept or trend. Explain it clearly, then show examples from their wardrobe that fit!\n`
+      
+      if (fashionTrends && fashionTrends.length > 0) {
+        userContext += `Current trends available for reference: ${fashionTrends.map(t => t.trend_name).join(', ')}\n`
+      }
+    }
     
     if (shouldSuggestOutfit && clothingItems && clothingItems.length > 0) {
-      userContext += `\n\n🎯 TRIGGER DETECTED: User wants outfit advice!\n`
+      userContext += `\n\n🎯 OUTFIT SUGGESTION ACTIVATED!\n`
       
       if (weatherData) {
-        userContext += `- Weather is ${weatherData.current.temperature}°C and ${weatherData.current.condition}\n`
+        userContext += `- Weather: ${weatherData.current.temperature}°C, ${weatherData.current.condition}\n`
       }
       
       if (calendarEvents && calendarEvents.length > 0) {
         const todayEvents = calendarEvents.filter(e => new Date(e.date).toDateString() === new Date().toDateString())
         if (todayEvents.length > 0) {
-          userContext += `- They have ${todayEvents.length} event(s) today: ${todayEvents.map(e => e.activity_tag).join(', ')}\n`
+          userContext += `- Today's events: ${todayEvents.map(e => e.activity_tag).join(', ')}\n`
         }
       }
       
-      userContext += `\nSuggest a COMPLETE outfit using their actual items (by name), considering weather + calendar + learned preferences. Explain your reasoning!`
+      if (fashionTrends && fashionTrends.length > 0) {
+        userContext += `- Consider these trends: ${fashionTrends.slice(0, 2).map(t => t.trend_name).join(', ')}\n`
+      }
+      
+      userContext += `\nSuggest a COMPLETE outfit using their actual items (by name), considering weather + calendar + trends + learned preferences. Explain your reasoning including any trend references!`
     }
 
     // Make OpenAI API call with enhanced context
