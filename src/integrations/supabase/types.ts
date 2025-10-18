@@ -846,6 +846,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      clean_old_reminders: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       get_admin_analytics: {
         Args: Record<PropertyKey, never>
         Returns: Json

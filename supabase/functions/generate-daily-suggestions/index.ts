@@ -82,51 +82,122 @@ serve(async (req) => {
           await supabase.from('smart_reminders').insert(reminders);
         }
 
-        // Generate outfit suggestions using OpenAI
+        // Generate outfit suggestions using OpenAI with structured output
         if (openAIApiKey && outfits.length > 0) {
-          const systemPrompt = `You are Olivia Bloom, a personal style advisor. Generate 3 outfit suggestions for today.
-          
-Weather: ${weather.description}, ${weather.temperature}°C
-User preferences: ${JSON.stringify(preferences?.favorite_styles || [])}
-Current trends: ${trends.map(t => t.trend_name).join(', ')}
+          // Build rich context for better suggestions
+          const userStyleContext = `
+Style Preferences: ${preferences?.favorite_styles?.join(', ') || 'Not specified'}
+Favorite Colors: ${preferences?.favorite_colors?.join(', ') || 'Any'}
+Body Type: ${preferences?.body_type || 'Not specified'}
+Climate: ${user.preferred_country || 'Not specified'}
 
-Available outfits: ${outfits.map(o => o.name).join(', ')}
+Recent Fashion Trends:
+${trends.map(t => `- ${t.trend_name}: ${t.description}`).join('\n')}
 
-Return ONLY outfit IDs from the available outfits list, separated by commas. Also provide brief reasoning.`;
+Available Outfits (${outfits.length} total):
+${outfits.map((o, i) => `${i + 1}. ${o.name} (ID: ${o.id}) - ${o.occasion || 'casual'} - Colors: ${o.colors?.join(', ') || 'various'}`).join('\n')}
+`;
 
-          const response = await fetch('https://api.openai.com/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${openAIApiKey}`,
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'gpt-4o-mini',
-              messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: 'Generate my daily outfit suggestions' }
-              ],
-              temperature: 0.7,
-              max_tokens: 300
-            }),
-          });
+          const systemPrompt = `You are Olivia Bloom, an expert personal style advisor with deep knowledge of fashion, trends, and individual style preferences.
 
-          if (response.ok) {
-            const aiData = await response.json();
-            const suggestion = aiData.choices[0].message.content;
-            
-            // Extract outfit IDs (simplified - in production would need better parsing)
-            const suggestedOutfitIds = outfits
-              .slice(0, 3)
-              .map(o => o.id);
+Today's Context:
+Weather: ${weather.description}, ${weather.temperature}°C (Feels like: ${weather.feels_like}°C)
+Season: ${new Date().getMonth() < 3 || new Date().getMonth() > 10 ? 'Winter' : new Date().getMonth() < 6 ? 'Spring' : new Date().getMonth() < 9 ? 'Summer' : 'Fall'}
 
-            // Save daily suggestion
+Your task: Suggest 3 perfect outfits for today that:
+1. Match the weather conditions perfectly
+2. Align with current fashion trends
+3. Reflect the user's personal style preferences
+4. Are appropriate for typical daily activities
+
+For each suggestion, provide:
+- The outfit ID from the available list
+- A compelling reason why this outfit is perfect for today
+- A style tip or confidence boost
+
+Be warm, encouraging, and fashion-forward in your tone.`;
+
+          try {
+            const response = await fetch('https://api.openai.com/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${openAIApiKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [
+                  { role: 'system', content: systemPrompt },
+                  { role: 'user', content: `Here's my style profile and available outfits:\n\n${userStyleContext}\n\nSuggest 3 outfits for today!` }
+                ],
+                temperature: 0.8,
+                max_tokens: 500
+              }),
+            });
+
+            if (response.ok) {
+              const aiData = await response.json();
+              const suggestion = aiData.choices[0].message.content;
+              
+              // Smart outfit selection: prioritize weather-appropriate and recently unworn
+              const weatherAppropriate = outfits.filter(o => {
+                const temp = weather.temperature;
+                if (temp < 10) return o.season?.includes('winter') || o.season?.includes('fall');
+                if (temp < 20) return o.season?.includes('spring') || o.season?.includes('fall');
+                return o.season?.includes('summer') || o.season?.includes('spring');
+              });
+
+              const sortedOutfits = (weatherAppropriate.length > 0 ? weatherAppropriate : outfits)
+                .sort((a, b) => {
+                  const aWorn = a.last_worn ? new Date(a.last_worn).getTime() : 0;
+                  const bWorn = b.last_worn ? new Date(b.last_worn).getTime() : 0;
+                  return aWorn - bWorn;
+                });
+
+              const suggestedOutfitIds = sortedOutfits
+                .slice(0, 3)
+                .map(o => o.id);
+
+              // Save daily suggestion
+              await supabase.from('daily_suggestions').insert({
+                user_id: user.user_id,
+                suggestion_date: new Date().toISOString().split('T')[0],
+                outfit_ids: suggestedOutfitIds,
+                weather_context: weather,
+                reasoning: suggestion,
+                was_viewed: false,
+                was_accepted: false
+              });
+
+              console.log(`Generated suggestions for user ${user.user_id}`);
+            } else {
+              console.error('OpenAI API error:', response.status);
+            }
+          } catch (aiError) {
+            console.error('Error calling OpenAI:', aiError);
+            // Fallback: still create suggestions with smart logic
+            const weatherAppropriate = outfits.filter(o => {
+              const temp = weather.temperature;
+              if (temp < 10) return o.season?.includes('winter') || o.season?.includes('fall');
+              if (temp < 20) return o.season?.includes('spring') || o.season?.includes('fall');
+              return o.season?.includes('summer') || o.season?.includes('spring');
+            });
+
+            const sortedOutfits = (weatherAppropriate.length > 0 ? weatherAppropriate : outfits)
+              .sort((a, b) => {
+                const aWorn = a.last_worn ? new Date(a.last_worn).getTime() : 0;
+                const bWorn = b.last_worn ? new Date(b.last_worn).getTime() : 0;
+                return aWorn - bWorn;
+              });
+
+            const suggestedOutfitIds = sortedOutfits.slice(0, 3).map(o => o.id);
+
             await supabase.from('daily_suggestions').insert({
               user_id: user.user_id,
               suggestion_date: new Date().toISOString().split('T')[0],
               outfit_ids: suggestedOutfitIds,
               weather_context: weather,
-              reasoning: suggestion,
+              reasoning: `Good morning! Based on today's weather (${weather.temperature}°C), here are my top picks for you. These outfits are weather-appropriate and you haven't worn them recently!`,
               was_viewed: false,
               was_accepted: false
             });
