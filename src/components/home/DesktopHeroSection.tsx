@@ -198,6 +198,7 @@ const DesktopHeroSection = ({
           <img 
             src={imageSrc} 
             alt={imageAlt}
+            fetchPriority="high"
             className="drop-shadow-lg animate-float object-contain max-h-[350px] lg:max-h-[450px] w-auto"
           />
           
