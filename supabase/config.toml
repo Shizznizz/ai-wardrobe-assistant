@@ -51,3 +51,7 @@ verify_jwt = false
 [[edge_functions]]
 path = "generate-daily-suggestions"
 verify_jwt = false
+
+[[edge_functions]]
+path = "sync-fashion-trends"
+verify_jwt = false
