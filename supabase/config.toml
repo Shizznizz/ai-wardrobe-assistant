@@ -37,6 +37,10 @@ path = "save-outfit-feedback"
 verify_jwt = false
 
 [[edge_functions]]
+path = "get-weather"
+verify_jwt = false
+
+[[edge_functions]]
 path = "generate-seasonal-outfits"
 verify_jwt = false
 

@@ -62,22 +62,48 @@ serve(async (req) => {
       )
     }
 
-    // Fetch user data for context including learning patterns
+    // Fetch user data for context including learning patterns and calendar
     const [
       { data: userPrefs },
       { data: clothingItems },
       { data: outfits },
       { data: outfitLogs },
       { data: profile },
-      { data: learningData }
+      { data: learningData },
+      { data: calendarEvents }
     ] = await Promise.all([
       supabaseClient.from('user_preferences').select('*').eq('user_id', userId).maybeSingle(),
-      supabaseClient.from('clothing_items').select('*').eq('user_id', userId).limit(25),
-      supabaseClient.from('outfits').select('*').eq('user_id', userId).limit(10),
+      supabaseClient.from('clothing_items').select('*').eq('user_id', userId).order('favorite', { ascending: false }).order('last_worn', { ascending: true, nullsFirst: false }).limit(50),
+      supabaseClient.from('outfits').select('*').eq('user_id', userId).order('favorite', { ascending: false }).order('times_worn', { ascending: false }).limit(15),
       supabaseClient.from('outfit_logs').select('*').eq('user_id', userId).order('date', { ascending: false }).limit(5),
       supabaseClient.from('profiles').select('first_name, pronouns').eq('id', userId).maybeSingle(),
-      supabaseClient.from('olivia_learning_data').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(20)
+      supabaseClient.from('olivia_learning_data').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(20),
+      supabaseClient.from('calendar_events').select('*').eq('user_id', userId).gte('date', new Date().toISOString()).order('date', { ascending: true }).limit(5)
     ])
+
+    // Get live weather if user has location set
+    let weatherData = null
+    if (userPrefs?.preferred_city) {
+      try {
+        const weatherResponse = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/get-weather`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`
+          },
+          body: JSON.stringify({
+            city: userPrefs.preferred_city,
+            country: userPrefs.preferred_country
+          })
+        })
+        
+        if (weatherResponse.ok) {
+          weatherData = await weatherResponse.json()
+        }
+      } catch (error) {
+        console.error('Error fetching weather:', error)
+      }
+    }
 
     // Build enhanced context for Olivia
     let userContext = `You are Olivia Bloom, the user's personal AI stylist and trusted fashion companion. You are confident, warm, and stylist-grade — think of a Vogue fashion editor and a close friend combined. You know the user's entire wardrobe, favorite colors, style preferences, planned activities, and weather. You suggest outfits based on those factors.
@@ -96,8 +122,16 @@ Here is what you know about this user:\n\n`
       userContext += `Pronouns: ${profile.pronouns}\n`
     }
 
-    // Location and preferences
-    if (userPrefs?.preferred_city && userPrefs?.preferred_country) {
+    // Location and LIVE weather
+    if (weatherData) {
+      userContext += `\n=== CURRENT WEATHER ===\n`
+      userContext += `Location: ${weatherData.location.name}, ${weatherData.location.country}\n`
+      userContext += `Temperature: ${weatherData.current.temperature}°C (feels like ${weatherData.current.feelsLike}°C)\n`
+      userContext += `Condition: ${weatherData.current.condition}\n`
+      userContext += `Humidity: ${weatherData.current.humidity}%\n`
+      userContext += `Wind: ${weatherData.current.windSpeed} km/h\n`
+      userContext += `\nIMPORTANT: Use this LIVE weather data when suggesting outfits. Consider temperature, condition, and wind.\n`
+    } else if (userPrefs?.preferred_city && userPrefs?.preferred_country) {
       userContext += `Location: ${userPrefs.preferred_city}, ${userPrefs.preferred_country}\n`
     }
     
@@ -121,21 +155,80 @@ Here is what you know about this user:\n\n`
       userContext += `Climate preferences: ${userPrefs.climate_preferences.join(', ')}\n`
     }
 
-    // Wardrobe items
+    // Smart Wardrobe Analysis (prioritized: favorites first, then by last worn)
     if (clothingItems && clothingItems.length > 0) {
-      userContext += `\nCurrent wardrobe (${clothingItems.length} items):\n`
-      clothingItems.forEach(item => {
-        const seasons = item.season && item.season.length > 0 ? ` (${item.season.join(', ')})` : ''
-        const occasions = item.occasions && item.occasions.length > 0 ? ` - ${item.occasions.join(', ')}` : ''
-        const favorite = item.favorite ? ' ⭐' : ''
-        userContext += `- ${item.name} (${item.type}, ${item.color})${seasons}${occasions}${favorite}\n`
+      userContext += `\n=== WARDROBE (Smart Sorted) ===\n`
+      userContext += `Total: ${clothingItems.length} items (showing favorites and recently unworn items first)\n\n`
+      
+      // Categorize items
+      const favorites = clothingItems.filter(item => item.favorite)
+      const recentlyUnworn = clothingItems.filter(item => !item.favorite && item.last_worn)
+      const neverWorn = clothingItems.filter(item => !item.last_worn)
+      
+      if (favorites.length > 0) {
+        userContext += `⭐ Favorite pieces (prioritize these):\n`
+        favorites.slice(0, 10).forEach(item => {
+          const seasons = item.season && item.season.length > 0 ? ` (${item.season.join(', ')})` : ''
+          const occasions = item.occasions && item.occasions.length > 0 ? ` - ${item.occasions.join(', ')}` : ''
+          const timesWorn = item.times_worn ? ` [worn ${item.times_worn}x]` : ''
+          userContext += `  - ${item.name} (${item.type}, ${item.color})${seasons}${occasions}${timesWorn}\n`
+        })
+      }
+      
+      if (neverWorn.length > 0) {
+        userContext += `\n🆕 Never worn (suggest these!):\n`
+        neverWorn.slice(0, 5).forEach(item => {
+          const seasons = item.season && item.season.length > 0 ? ` (${item.season.join(', ')})` : ''
+          userContext += `  - ${item.name} (${item.type}, ${item.color})${seasons}\n`
+        })
+      }
+      
+      if (recentlyUnworn.length > 0) {
+        userContext += `\n♻️ Ready for rotation:\n`
+        recentlyUnworn.slice(0, 10).forEach(item => {
+          const lastWorn = item.last_worn ? new Date(item.last_worn).toLocaleDateString() : 'unknown'
+          const seasons = item.season && item.season.length > 0 ? ` (${item.season.join(', ')})` : ''
+          userContext += `  - ${item.name} (${item.type}, ${item.color}) - last worn: ${lastWorn}${seasons}\n`
+        })
+      }
+    }
+
+    // Calendar Events - PROACTIVE SUGGESTIONS
+    if (calendarEvents && calendarEvents.length > 0) {
+      userContext += `\n=== UPCOMING EVENTS ===\n`
+      const today = new Date().toDateString()
+      const tomorrow = new Date(Date.now() + 86400000).toDateString()
+      
+      calendarEvents.forEach(event => {
+        const eventDate = new Date(event.date)
+        const dateStr = eventDate.toDateString()
+        let timeframe = ''
+        
+        if (dateStr === today) {
+          timeframe = '🔴 TODAY'
+        } else if (dateStr === tomorrow) {
+          timeframe = '🟡 TOMORROW'
+        } else {
+          timeframe = eventDate.toLocaleDateString()
+        }
+        
+        userContext += `${timeframe}: ${event.activity_tag || 'Event'}`
+        if (event.notes) {
+          userContext += ` - ${event.notes}`
+        }
+        if (event.outfit_id) {
+          userContext += ` (outfit planned)`
+        }
+        userContext += `\n`
       })
+      
+      userContext += `\nIMPORTANT: Be proactive! If user asks about today/tomorrow, suggest outfits for their calendar events.\n`
     }
 
     // Saved outfits
     if (outfits && outfits.length > 0) {
-      userContext += `\nSaved outfits (${outfits.length} total):\n`
-      outfits.slice(0, 5).forEach(outfit => {
+      userContext += `\n=== SAVED OUTFITS ===\n`
+      outfits.forEach(outfit => {
         const occasions = outfit.occasions && outfit.occasions.length > 0 ? ` - ${outfit.occasions.join(', ')}` : ''
         const favorite = outfit.favorite ? ' ⭐' : ''
         const timesWorn = outfit.times_worn ? ` (worn ${outfit.times_worn} times)` : ''
@@ -192,21 +285,48 @@ Here is what you know about this user:\n\n`
     }
 
     userContext += `\n\n=== YOUR MISSION ===
-Based on this complete profile, provide highly personalized styling advice. When users mention plans, activities, weather, or occasions, proactively suggest complete outfits using their actual wardrobe items. Reference specific pieces by name and explain why they work together based on their learned preferences. Be their personal stylist who truly knows their style evolution and wardrobe inside out.
+You are their PROACTIVE personal stylist with complete context:
+- LIVE weather data (use it!)
+- Upcoming calendar events (suggest for these!)
+- Smart-sorted wardrobe (prioritize favorites and never-worn items)
+- Learned preferences from past feedback
+
+When users ask "what should I wear today?" or mention any plans:
+1. Check their calendar for today/tomorrow events
+2. Consider the CURRENT weather
+3. Suggest outfits using their actual wardrobe items (mention by name)
+4. Explain WHY each piece works (weather + occasion + their style)
+5. Prioritize favorites and items they haven't worn recently
+
+Be conversational and proactive. If you see they have an event today, mention it even if they didn't ask!
 
 After suggesting an outfit, always ask: "How does this outfit sound? Would you like me to adjust anything?" to gather more learning data.`
 
-    // Detect smart suggestion triggers in the latest user message
+    // Enhanced smart suggestion triggers
     const latestMessage = messages[messages.length - 1]?.content.toLowerCase() || ''
     const suggestionTriggers = [
+      'today', 'tomorrow', 'tonight', 'what should i wear', 'outfit', 'dress',
       'dinner', 'lunch', 'meeting', 'date', 'party', 'event', 'shopping', 'interview', 'work',
-      'weather', 'tomorrow', 'tonight', 'weekend', 'going to', 'have a', 'attending'
+      'weather', 'weekend', 'going to', 'have a', 'attending', 'planning'
     ]
     
     const shouldSuggestOutfit = suggestionTriggers.some(trigger => latestMessage.includes(trigger))
     
     if (shouldSuggestOutfit && clothingItems && clothingItems.length > 0) {
-      userContext += `\n\nIMPORTANT: The user just mentioned plans or activities. Proactively suggest a complete outfit using their actual wardrobe items, explaining why each piece works for their situation.`
+      userContext += `\n\n🎯 TRIGGER DETECTED: User wants outfit advice!\n`
+      
+      if (weatherData) {
+        userContext += `- Weather is ${weatherData.current.temperature}°C and ${weatherData.current.condition}\n`
+      }
+      
+      if (calendarEvents && calendarEvents.length > 0) {
+        const todayEvents = calendarEvents.filter(e => new Date(e.date).toDateString() === new Date().toDateString())
+        if (todayEvents.length > 0) {
+          userContext += `- They have ${todayEvents.length} event(s) today: ${todayEvents.map(e => e.activity_tag).join(', ')}\n`
+        }
+      }
+      
+      userContext += `\nSuggest a COMPLETE outfit using their actual items (by name), considering weather + calendar + learned preferences. Explain your reasoning!`
     }
 
     // Make OpenAI API call with enhanced context
