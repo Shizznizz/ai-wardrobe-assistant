@@ -42,11 +42,6 @@ const MixAndMatch = () => {
   }, []);
 
   const handleStyleMe = () => {
-    if (!isAuthenticated) {
-      toast.error("Please log in to get personalized outfit recommendations");
-      return;
-    }
-    
     if (clothingItems.length === 0) {
       toast.warning("Please add some clothing items to your wardrobe first");
       return;
@@ -144,25 +139,9 @@ const MixAndMatch = () => {
     }, 300);
   };
   
-  // Show authentication notice if user is not logged in
-  const renderAuthNotice = () => {
-    if (!isAuthenticated) {
-      return (
-        <Alert variant="warning" className="mb-6 bg-amber-900/20 border-amber-500/50">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Authentication Required</AlertTitle>
-          <AlertDescription>
-            Please log in to see your outfits and get personalized recommendations.
-          </AlertDescription>
-        </Alert>
-      );
-    }
-    return null;
-  };
-  
-  // Show empty state if authenticated but no items
+  // Show empty state if no items
   const renderEmptyWardrobeNotice = () => {
-    if (isAuthenticated && !isLoadingItems && clothingItems.length === 0) {
+    if (!isLoadingItems && clothingItems.length === 0) {
       return (
         <Alert variant="warning" className="mb-6 bg-blue-900/20 border-blue-500/50">
           <AlertCircle className="h-4 w-4" />
@@ -199,7 +178,6 @@ const MixAndMatch = () => {
       />
       
       <div className="container mx-auto px-4 space-y-10 pt-6 pb-20">
-        {renderAuthNotice()}
         {renderEmptyWardrobeNotice()}
         
         <EnhancedWeatherSection 
@@ -211,9 +189,7 @@ const MixAndMatch = () => {
           weatherCondition={weatherCondition}
         />
         
-        {isAuthenticated && (
-          <>
-            <DailyOutfitSection 
+        <DailyOutfitSection
               clothingItems={clothingItems} 
               currentOutfit={currentOutfit}
               isLoading={isLoadingItems} 
@@ -258,13 +234,11 @@ const MixAndMatch = () => {
               </div>
             )}
             
-            <CreateOutfitSection 
-              clothingItems={clothingItems}
-              isPremium={isAuthenticated}
-              isLoading={isLoadingItems}
-            />
-          </>
-        )}
+        <CreateOutfitSection 
+          clothingItems={clothingItems}
+          isPremium={isAuthenticated}
+          isLoading={isLoadingItems}
+        />
       </div>
       
       {/* New Magic Section - replaces the ConfidenceSection */}

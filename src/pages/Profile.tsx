@@ -1,11 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Container } from '@/components/ui/container';
 import { useAuth } from '@/hooks/useAuth';
-import { useNavigate } from 'react-router-dom';
 import { Loader2Icon } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import AuthRequiredModal from '@/components/shared/AuthRequiredModal';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProfileHeader from '@/components/profile/ProfileHeader';
@@ -28,8 +26,6 @@ import OliviaStyleInsightsSection from '@/components/profile/OliviaStyleInsights
 
 const Profile = () => {
   const { user, isAuthenticated, loading } = useAuth();
-  const navigate = useNavigate();
-  const [showAuthModal, setShowAuthModal] = useState(false);
   const [userPreferences, setUserPreferences] = useState<UserPreferences | null>(null);
   const [originalPreferences, setOriginalPreferences] = useState<UserPreferences | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,13 +38,6 @@ const Profile = () => {
       fetchUserPreferences();
     }
   }, [isAuthenticated, user]);
-  
-  // If user is not authenticated and not loading, show auth modal
-  useEffect(() => {
-    if (!loading && !isAuthenticated) {
-      setShowAuthModal(true);
-    }
-  }, [loading, isAuthenticated]);
   
   const fetchUserPreferences = async () => {
     try {
@@ -498,13 +487,6 @@ const Profile = () => {
           />
         )}
       </Container>
-      
-      <AuthRequiredModal
-        isOpen={showAuthModal}
-        onClose={() => navigate('/')}
-        title="Login Required"
-        description="You must be logged in to access your profile."
-      />
     </>
   );
 };

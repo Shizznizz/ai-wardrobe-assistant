@@ -26,6 +26,7 @@ import { AuthProvider } from '@/hooks/useAuth';
 import { UserDataProvider } from '@/hooks/useUserData';
 import PageLayout from '@/components/shared/PageLayout';
 import ScrollToTop from '@/components/ScrollToTop';
+import ProtectedRoute from '@/components/auth/ProtectedRoute';
 
 function App() {
   return (
@@ -36,26 +37,69 @@ function App() {
             <Router>
               <ScrollToTop />
               <Routes>
-                {/* Apply PageLayout to Home page as well */}
+                {/* Public routes */}
                 <Route path="/" element={<PageLayout><Home /></PageLayout>} />
-                {/* Use PageLayout for authenticated pages to ensure Footer appears on all pages */}
-                <Route path="/my-wardrobe" element={<PageLayout><MyWardrobe /></PageLayout>} />
-                <Route path="/mix-and-match" element={<PageLayout><MixAndMatch /></PageLayout>} />
-                <Route path="/style-planner" element={<PageLayout><StylePlanner /></PageLayout>} />
-                <Route path="/fitting-room" element={<PageLayout><FittingRoom /></PageLayout>} />
-                <Route path="/shop-and-try" element={<PageLayout><ShopAndTry /></PageLayout>} />
-                <Route path="/profile" element={<PageLayout><Profile /></PageLayout>} />
-                <Route path="/premium" element={<PageLayout><Premium /></PageLayout>} />
-                {/* Add the Quizzes routes */}
-                <Route path="/quizzes" element={<PageLayout><Quizzes /></PageLayout>} />
-                <Route path="/quiz-results" element={<PageLayout><QuizResults /></PageLayout>} />
-                <Route path="/find-your-style" element={<PageLayout><StyleQuizPage /></PageLayout>} />
-                {/* Add PageLayout to Auth page as well to ensure footer appears there too */}
                 <Route path="/auth" element={<PageLayout><Auth /></PageLayout>} />
-                {/* Pitch page */}
                 <Route path="/pitch" element={<PageLayout><Pitch /></PageLayout>} />
+                
+                {/* Protected routes - require authentication */}
+                <Route path="/my-wardrobe" element={
+                  <ProtectedRoute>
+                    <PageLayout><MyWardrobe /></PageLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/mix-and-match" element={
+                  <ProtectedRoute>
+                    <PageLayout><MixAndMatch /></PageLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/style-planner" element={
+                  <ProtectedRoute>
+                    <PageLayout><StylePlanner /></PageLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/fitting-room" element={
+                  <ProtectedRoute>
+                    <PageLayout><FittingRoom /></PageLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/shop-and-try" element={
+                  <ProtectedRoute>
+                    <PageLayout><ShopAndTry /></PageLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/profile" element={
+                  <ProtectedRoute>
+                    <PageLayout><Profile /></PageLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/premium" element={
+                  <ProtectedRoute>
+                    <PageLayout><Premium /></PageLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/quizzes" element={
+                  <ProtectedRoute>
+                    <PageLayout><Quizzes /></PageLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/quiz-results" element={
+                  <ProtectedRoute>
+                    <PageLayout><QuizResults /></PageLayout>
+                  </ProtectedRoute>
+                } />
+                <Route path="/find-your-style" element={
+                  <ProtectedRoute>
+                    <PageLayout><StyleQuizPage /></PageLayout>
+                  </ProtectedRoute>
+                } />
+                
                 {/* Admin Dashboard - secure route */}
-                <Route path="/admin-dashboard" element={<AdminDashboard />} />
+                <Route path="/admin-dashboard" element={
+                  <ProtectedRoute>
+                    <AdminDashboard />
+                  </ProtectedRoute>
+                } />
               </Routes>
             </Router>
             <Toaster position="top-center" richColors closeButton />

@@ -10,7 +10,6 @@ import WardrobeHeader from '@/components/wardrobe/WardrobeHeader';
 import WardrobeSearch from '@/components/wardrobe/WardrobeSearch';
 import WardrobeControls from '@/components/wardrobe/WardrobeControls';
 import WardrobeFilterBar from '@/components/wardrobe/WardrobeFilterBar';
-import WardrobeAuthNotice from '@/components/wardrobe/WardrobeAuthNotice';
 import WardrobeEmptyState from '@/components/wardrobe/WardrobeEmptyState';
 import WardrobeMainContent from '@/components/wardrobe/WardrobeMainContent';
 
@@ -52,19 +51,10 @@ const MyWardrobe = () => {
   }, [clothingItems, isLoadingItems, isInitialLoad]);
 
   const handleUploadNew = () => {
-    if (!isAuthenticated) {
-      toast.error("Please log in to add items to your wardrobe");
-      return;
-    }
     // Upload modal handles its own visibility
   };
 
   const handleAddItem = (newItem: ClothingItem) => {
-    if (!isAuthenticated) {
-      toast.error("Please log in to add items to your wardrobe");
-      return;
-    }
-    
     addClothingItem(newItem);
     toast.success("New item added to your wardrobe!");
   };
@@ -205,8 +195,6 @@ const MyWardrobe = () => {
       />
       
       <div className="container mx-auto px-4 pt-6">
-        <WardrobeAuthNotice isAuthenticated={isAuthenticated} />
-        
         {/* Only show controls and search if we have items or loading */}
         {(cachedItems.length > 0 || isLoadingItems) && (
           <div className="space-y-4">
