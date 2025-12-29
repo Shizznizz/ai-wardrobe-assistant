@@ -17,7 +17,7 @@ import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import MixMatchActions from '@/components/outfits/mix-match/MixMatchActions';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/integrations/supabase/client';
+import { getSupabaseClient } from '@/integrations/supabase/client';
 
 const MixAndMatch = () => {
   const { isAuthenticated, user } = useAuth();
@@ -77,7 +77,15 @@ const MixAndMatch = () => {
     try {
       // Save to Supabase if authenticated
       if (user) {
-        await supabase
+        // Get Supabase client safely
+        const supabase = getSupabaseClient();
+        if (!supabase) {
+          console.warn('[MixAndMatch] Supabase client not available - cannot save outfit');
+          toast.error("Unable to save outfit. Database service is currently unavailable.");
+          return;
+        }
+
+        const { error } = await supabase
           .from('outfits')
           .insert({
             id: outfit.id,
@@ -91,15 +99,21 @@ const MixAndMatch = () => {
             user_id: user.id,
             date_added: new Date().toISOString()
           });
+
+        if (error) {
+          console.error('[MixAndMatch] Error saving outfit to database:', error);
+          toast.error("Failed to save outfit to database. Please try again.");
+          return;
+        }
       }
-      
+
       // Refresh outfits data
       if (refreshOutfits) {
         await refreshOutfits();
       }
-      
+
       toast.success("New outfit created!");
-      
+
       // Scroll to outfits section
       const outfitsSection = document.getElementById('saved-outfits-section');
       if (outfitsSection) {
@@ -108,7 +122,7 @@ const MixAndMatch = () => {
         }, 300);
       }
     } catch (error) {
-      console.error('Error saving outfit:', error);
+      console.error('[MixAndMatch] Error saving outfit:', error);
       toast.error("Failed to save outfit. Please try again.");
     }
   };

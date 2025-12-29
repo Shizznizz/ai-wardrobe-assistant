@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '@/integrations/supabase/client';
+import { getSupabaseClient } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -29,18 +29,26 @@ const Auth = () => {
   
   const checkUserPreferences = async () => {
     if (!user) return;
-    
+
+    // Get Supabase client safely
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      console.warn('[Auth] Supabase client not available - redirecting to home');
+      navigate('/');
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('user_preferences')
         .select('id')
         .eq('user_id', user.id)
         .single();
-        
+
       if (error && error.code !== 'PGRST116') {
-        console.error('Error checking user preferences:', error);
+        console.error('[Auth] Error checking user preferences:', error);
       }
-      
+
       // If user has no preferences, redirect to quiz
       if (!data) {
         navigate('/quizzes');
@@ -49,7 +57,7 @@ const Auth = () => {
         navigate('/');
       }
     } catch (error) {
-      console.error('Error checking user preferences:', error);
+      console.error('[Auth] Error checking user preferences:', error);
       navigate('/');
     }
   };
@@ -60,21 +68,28 @@ const Auth = () => {
       toast.error("Please enter your email and password");
       return;
     }
-    
+
+    // Get Supabase client safely
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      toast.error("Authentication service is currently unavailable. Please check your configuration.");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email,
         password
       });
-      
+
       if (error) throw error;
-      
+
       // Authentication state is handled by the useAuth hook
       // Redirection is handled by the useEffect above
       toast.success("Welcome back!");
     } catch (error: any) {
-      console.error('Error signing in:', error);
+      console.error('[Auth] Error signing in:', error);
       toast.error(error.message || "Failed to sign in");
     } finally {
       setIsLoading(false);
@@ -87,20 +102,27 @@ const Auth = () => {
       toast.error("Please enter your email and password");
       return;
     }
-    
+
+    // Get Supabase client safely
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      toast.error("Authentication service is currently unavailable. Please check your configuration.");
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { error } = await supabase.auth.signUp({
         email,
         password
       });
-      
+
       if (error) throw error;
-      
+
       toast.success("Account created! Please check your email for verification.");
       // The redirection will be handled by the useEffect above after auth state changes
     } catch (error: any) {
-      console.error('Error signing up:', error);
+      console.error('[Auth] Error signing up:', error);
       toast.error(error.message || "Failed to sign up");
     } finally {
       setIsLoading(false);

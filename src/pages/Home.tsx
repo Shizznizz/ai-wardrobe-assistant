@@ -20,7 +20,7 @@ import PremiumTeaserSection from '@/components/home/PremiumTeaserSection';
 import InstantOutfitMoment from '@/components/home/InstantOutfitMoment';
 import { Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { getSupabaseClient } from '@/integrations/supabase/client';
 
 const Home = () => {
   const navigate = useNavigate();
@@ -57,6 +57,15 @@ const Home = () => {
         return;
       }
 
+      // Get Supabase client safely
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        console.warn('[Home] Supabase client not available - skipping wardrobe check');
+        setCheckingWardrobe(false);
+        setHasWardrobeItems(false);
+        return;
+      }
+
       try {
         // Try clothing_items first
         const { data: clothingData, error: clothingError } = await supabase
@@ -80,7 +89,7 @@ const Home = () => {
 
         setHasWardrobeItems(!wardrobeError && !!wardrobeData);
       } catch (error) {
-        console.error('Error checking wardrobe:', error);
+        console.error('[Home] Error checking wardrobe:', error);
         setHasWardrobeItems(false);
       } finally {
         setCheckingWardrobe(false);
