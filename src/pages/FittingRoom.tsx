@@ -22,6 +22,8 @@ import CollapsibleHowItWorksSection from '@/components/fitting-room/CollapsibleH
 import OliviaStylesSection from '@/components/fitting-room/OliviaStylesSection';
 import TrendingLooksSection from '@/components/fitting-room/TrendingLooksSection';
 import { trackOutfitUsage } from '@/utils/outfitTracking';
+import OliviaChatPanel from '@/components/olivia/OliviaChatPanel';
+import OliviaChatBubble from '@/components/olivia/OliviaChatBubble';
 
 const FittingRoom = () => {
   const { isAuthenticated, isPremiumUser } = useAuth();
@@ -52,6 +54,7 @@ const FittingRoom = () => {
   const resultPreviewRef = useRef<HTMLDivElement>(null);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [previousUserPhoto, setPreviousUserPhoto] = useState<string | null>(null);
+  const [showOliviaChat, setShowOliviaChat] = useState(false);
   const [previousSelectedOutfit, setPreviousSelectedOutfit] = useState<Outfit | null>(null);
 
   // Helper function to get clothing item by ID
@@ -271,6 +274,19 @@ const FittingRoom = () => {
           />
         )}
       </Container>
+
+      {/* Olivia Chat Bubble */}
+      <OliviaChatBubble
+        isOpen={showOliviaChat}
+        onToggle={() => setShowOliviaChat(!showOliviaChat)}
+      />
+
+      {/* Olivia Chat Panel */}
+      <OliviaChatPanel
+        isOpen={showOliviaChat}
+        onClose={() => setShowOliviaChat(false)}
+        wardrobeCount={clothingItems?.length || null}
+      />
 
       {/* Sticky model preview */}
       <AnimatePresence>

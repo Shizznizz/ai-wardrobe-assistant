@@ -20,6 +20,7 @@ import PremiumTeaserSection from '@/components/home/PremiumTeaserSection';
 import InstantOutfitMoment from '@/components/home/InstantOutfitMoment';
 import HowItWorksMicro from '@/components/home/HowItWorksMicro';
 import OliviaChatPanel from '@/components/olivia/OliviaChatPanel';
+import OliviaChatBubble from '@/components/olivia/OliviaChatBubble';
 import { Button } from '@/components/ui/button';
 import { Sparkles, MessageCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -207,6 +208,12 @@ const Home = () => {
       <OnboardingFlow 
         isOpen={showOnboarding} 
         onClose={() => setShowOnboarding(false)} 
+      />
+
+      {/* Olivia Chat Bubble */}
+      <OliviaChatBubble
+        isOpen={showOliviaChat}
+        onToggle={() => setShowOliviaChat(!showOliviaChat)}
       />
 
       {/* Olivia Chat Panel */}

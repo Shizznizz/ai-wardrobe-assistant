@@ -16,6 +16,7 @@ import CollapsibleOliviaSection from '@/components/outfits/CollapsibleOliviaSect
 import MissedOpportunitiesSection from '@/components/outfits/calendar/MissedOpportunitiesSection';
 import SmartRemindersPanel from '@/components/olivia/SmartRemindersPanel';
 import OliviaChatPanel from '@/components/olivia/OliviaChatPanel';
+import OliviaChatBubble from '@/components/olivia/OliviaChatBubble';
 import { Button } from '@/components/ui/button';
 
 const StylePlanner = () => {
@@ -144,6 +145,12 @@ const StylePlanner = () => {
           />
         </motion.div>
       </section>
+
+      {/* Olivia Chat Bubble */}
+      <OliviaChatBubble
+        isOpen={showOliviaChat}
+        onToggle={() => setShowOliviaChat(!showOliviaChat)}
+      />
 
       {/* Olivia Chat Panel */}
       <OliviaChatPanel
