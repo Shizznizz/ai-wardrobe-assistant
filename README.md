@@ -1,5 +1,3 @@
-
-
 # Copyright & Usage Notice
 
 This application, **"Wardrobe Wizardry"**, is a proprietary fashion-tech concept by **Daniel Deurloo (Shizznizz)**. All rights reserved.
@@ -8,106 +6,206 @@ This application, **"Wardrobe Wizardry"**, is a proprietary fashion-tech concept
 
 This project is protected under a **custom proprietary license**. For licensing inquiries, please contact: 📧 danieldeurloo@hotmail.com
 
-# Project Vision
+---
+
+# Wardrobe Wizardry
 
 **Wardrobe Wizardry** reimagines how people interact with their clothing by offering a personalized fashion experience that adapts to individual style, occasion needs, and real-time weather conditions.
 
-## Our Mission
+## What It Does
 
-To empower individuals to express their unique style confidently while eliminating the daily "what to wear" dilemma through intelligent fashion technology.
+A fashion-tech application that provides:
+- **Virtual Wardrobe Management**: Digitize and organize your entire clothing collection
+- **Smart Outfit Generator**: AI-powered outfit recommendations based on personal style, weather, and occasions
+- **Olivia Bloom AI Stylist**: Your personal AI fashion assistant that learns your preferences
+- **Virtual Try-On Experience**: Visualize outfits on your own photos using TensorFlow body segmentation
+- **Style Quizzes**: Discover your personal style through interactive assessments
 
-## Key Features
+## Tech Stack
 
-- **Virtual Wardrobe Management**: Digitize your entire collection for effortless organization and outfit creation.
-- **Smart Outfit Generator**: Receive tailored outfit recommendations based on your personal style, local weather conditions, and upcoming occasions.
-- **Olivia Bloom AI Stylist**: Get professional fashion advice from your personal style assistant who learns your preferences over time.
-- **Virtual Try-On Experience**: Visualize outfits on your own photos before wearing them in real life.
+- **Frontend**: React 18 + TypeScript + Vite
+- **UI**: Tailwind CSS + shadcn/ui (Radix UI primitives)
+- **Backend**: Supabase (PostgreSQL + Auth + Storage + Edge Functions)
+- **State**: React Context + TanStack Query
+- **AI/ML**: TensorFlow.js + Hugging Face Transformers
+- **Routing**: React Router 6 with protected routes
 
-Wardrobe Wizardry represents a breakthrough in fashion-tech by seamlessly blending artificial intelligence with personalized styling to create a truly unique experience that grows with each user.
+---
 
-# Meet Olivia – Your AI Stylist
+## Local Setup
 
-At the heart of Wardrobe Wizardry is **Olivia Bloom** – your personal AI fashion stylist who transforms how you dress every day. More than just an algorithm, Olivia is the fashionable friend you've always wanted.
+### Prerequisites
 
-## How Olivia Helps You Shine
+- Node.js (recommended: install via [nvm](https://github.com/nvm-sh/nvm#installing-and-updating))
+- npm or bun package manager
+- Supabase account with a project created
 
-- **Personalized Style Guidance**: Olivia analyzes your wardrobe items, color preferences, body shape, and personal style to create looks that are uniquely you.
-- **Weather-Adaptive Recommendations**: She checks your local forecast to suggest outfits that are both stylish and practical for the day ahead.
-- **Occasion-Specific Styling**: Whether it's a job interview, date night, or weekend brunch, Olivia ensures you're dressed appropriately for any event.
-- **Trend Integration**: While honoring your personal style, Olivia gently introduces trending elements that complement your existing wardrobe.
+### Installation Steps
 
-## Who is Olivia?
+1. **Clone the repository**
+   ```bash
+   git clone <your-repo-url>
+   cd ai-wardrobe-assistant
+   ```
 
-Olivia Bloom joined the Wardrobe Wizardry team after years in the fashion industry. With an impeccable eye for style and color harmony, she's now bringing her expertise to everyone through AI. Her approach is confident yet kind, mixing high-fashion knowledge with practical advice. Olivia's talent lies in understanding not just what's trendy, but what works for *you* – making her suggestions feel like they're coming from someone who truly gets your style journey.
+2. **Install dependencies**
+   ```bash
+   npm install
+   # or
+   bun install
+   ```
 
-When interacting with Olivia, expect the attentiveness of a personal shopper combined with the efficiency of cutting-edge AI – all wrapped in a friendly, conversational tone that makes fashion advice feel like chatting with a stylish friend.
+3. **Configure environment variables**
+   - Copy `.env.example` to `.env`
+   - Fill in your Supabase credentials:
+     ```bash
+     cp .env.example .env
+     ```
+   - Update `.env` with your values (see Environment Variables section below)
 
-# Welcome to your Lovable project
+4. **Start the development server**
+   ```bash
+   npm run dev
+   ```
+   - App will be available at `http://localhost:8080`
 
-## Project info
+---
 
-**URL**: https://lovable.dev/projects/2816d45f-fbe4-4db2-a015-05ea9f4af6a6
+## Available Scripts
 
-## How can I edit this code?
+```bash
+# Development
+npm run dev          # Start dev server on port 8080
 
-There are several ways of editing your application.
+# Building
+npm run build        # Production build
+npm run build:dev    # Development build (with source maps)
+npm run preview      # Preview production build locally
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/2816d45f-fbe4-4db2-a015-05ea9f4af6a6) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+# Code Quality
+npm run lint         # Run ESLint
+npm run typecheck    # Run TypeScript type checking (no emit)
 ```
 
-**Edit a file directly in GitHub**
+**Note**: No test suite is currently configured.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+---
 
-**Use GitHub Codespaces**
+## Environment Variables
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+All environment variables must be prefixed with `VITE_` for Vite to expose them to the client.
 
-## What technologies are used for this project?
+Create a `.env` file in the project root with the following variables (see `.env.example`):
 
-This project is built with .
+| Variable | Purpose |
+|----------|---------|
+| `VITE_SUPABASE_URL` | Your Supabase project URL |
+| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/public API key (safe for client-side) |
+| `VITE_SUPABASE_PROJECT_ID` | Supabase project identifier |
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+**Security**: Never commit the `.env` file to version control. It is listed in `.gitignore`.
 
-## How can I deploy this project?
+---
 
-Simply open [Lovable](https://lovable.dev/projects/2816d45f-fbe4-4db2-a015-05ea9f4af6a6) and click on Share -> Publish.
+## Deployment
 
-## I want to use a custom domain - is that possible?
+### Lovable Platform (Recommended)
 
-We don't support custom domains (yet). If you want to deploy your project under your own domain then we recommend using Netlify. Visit our docs for more details: [Custom domains](https://docs.lovable.dev/tips-tricks/custom-domain/)
+1. Visit the [Lovable Project Dashboard](https://lovable.dev/projects/2816d45f-fbe4-4db2-a015-05ea9f4af6a6)
+2. Click **Share → Publish**
+3. Your app will be deployed automatically
+
+### Alternative: Netlify/Vercel
+
+1. Build the production bundle: `npm run build`
+2. Deploy the `dist/` directory to your hosting provider
+3. Set environment variables in your hosting dashboard
+4. Configure redirects for client-side routing (e.g., `_redirects` file for Netlify)
+
+**Custom Domain**: See [Lovable docs](https://docs.lovable.dev/tips-tricks/custom-domain/) for custom domain setup.
+
+---
+
+## Project Structure
+
+```
+/
+├── src/
+│   ├── components/     # React components (organized by feature)
+│   ├── pages/          # Page-level components
+│   ├── hooks/          # Custom React hooks
+│   ├── services/       # Business logic & Supabase operations
+│   ├── lib/            # Utility libraries & types
+│   ├── integrations/   # Supabase client & generated types
+│   └── App.tsx         # Root component with providers & routes
+├── supabase/
+│   ├── migrations/     # Database schema migrations
+│   └── functions/      # Supabase Edge Functions
+├── public/             # Static assets
+└── .env                # Environment variables (not committed)
+```
+
+See `CLAUDE.md` for detailed architecture documentation.
+
+---
+
+## Troubleshooting
+
+**Build fails or dependencies won't install**
+- Clear `node_modules/` and `package-lock.json`, then reinstall: `rm -rf node_modules package-lock.json && npm install`
+- Ensure you're using a compatible Node.js version (Node 18+ recommended)
+
+**"Supabase client error" or authentication fails**
+- Verify all three `VITE_SUPABASE_*` variables are set correctly in `.env`
+- Check that your Supabase project is active and credentials are valid
+- Restart the dev server after changing `.env`
+
+**TypeScript errors in the editor**
+- Run `npm run typecheck` to see all type errors
+- This project uses relaxed TypeScript settings (`noImplicitAny: false`), some warnings are expected
+
+**Styles not applying or theme broken**
+- Restart the Vite dev server (Ctrl+C, then `npm run dev`)
+- Check that `src/index.css` is imported in `main.tsx`
+- Verify Tailwind classes are not being purged incorrectly
+
+**"Module not found" or import errors**
+- Ensure you're using `@/*` import aliases (configured in `tsconfig.json`)
+- Check that the file path exists and is correctly cased (Linux/macOS are case-sensitive)
+
+---
+
+## Contributing
+
+**IMPORTANT**: This is a proprietary project. Contributions require explicit written permission from Daniel Deurloo.
+
+For collaboration inquiries:
+- **Email**: danieldeurloo@hotmail.com
+- **Subject**: "Wardrobe Wizardry Collaboration"
+
+See `CONTRIBUTING.md` for full policy details.
+
+---
+
+## License
+
+Proprietary. All rights reserved. See `LICENSE` file for details.
+
+---
+
+## Meet Olivia – Your AI Stylist
+
+At the heart of Wardrobe Wizardry is **Olivia Bloom** – your personal AI fashion stylist who transforms how you dress every day.
+
+### How Olivia Helps You Shine
+
+- **Personalized Style Guidance**: Analyzes your wardrobe items, color preferences, body shape, and personal style
+- **Weather-Adaptive Recommendations**: Checks local forecast to suggest outfits that are both stylish and practical
+- **Occasion-Specific Styling**: Ensures you're dressed appropriately for job interviews, dates, or weekend brunch
+- **Trend Integration**: Introduces trending elements that complement your existing wardrobe
+
+Olivia's approach is confident yet kind, mixing high-fashion knowledge with practical advice. Her suggestions feel like they're coming from a stylish friend who truly gets your style journey.
+
+---
+
+**Project URL**: https://lovable.dev/projects/2816d45f-fbe4-4db2-a015-05ea9f4af6a6
