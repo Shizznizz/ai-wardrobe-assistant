@@ -1,12 +1,14 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Camera, ArrowLeft, Download, RefreshCw, Share, User } from 'lucide-react';
+import { ArrowLeft, RefreshCw, User, Layers } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Outfit } from '@/lib/types';
-import OliviaRatingSection from '@/components/fitting-room/OliviaRatingSection';
+import BeforeAfterCompare from '@/components/fitting-room/BeforeAfterCompare';
+import StudioPresets, { PresetName, getPresetFilter } from '@/components/fitting-room/StudioPresets';
+import ExportPanel from '@/components/fitting-room/ExportPanel';
 
 interface ResultPreviewSectionProps {
   finalImage: string | null;
@@ -31,6 +33,11 @@ const ResultPreviewSection = ({
   onTryDifferentOutfit,
   onStartOver
 }: ResultPreviewSectionProps) => {
+  const [activePreset, setActivePreset] = useState<PresetName>('normal');
+  const [showCompare, setShowCompare] = useState(false);
+  
+  const currentFilter = getPresetFilter(activePreset);
+
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }}
@@ -47,33 +54,20 @@ const ResultPreviewSection = ({
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.5 }}
             >
-              {isUsingOliviaImage ? "Here's how it looks on Olivia" : "Here's how it looks on you"}
+              {isUsingOliviaImage ? "Preview with Olivia" : "Your Fit Preview"}
             </motion.h2>
             
-            <div className="flex items-center gap-2">
-              {finalImage && (
-                <>
-                  <Button 
-                    size="sm"
-                    variant="outline"
-                    className="border-white/20 text-white hover:bg-white/10 hover:border-white/40 hover:shadow-sm"
-                    onClick={onSaveLook}
-                  >
-                    <Download className="h-4 w-4 mr-1" />
-                    Save
-                  </Button>
-                  
-                  <Button 
-                    size="sm"
-                    variant="outline" 
-                    className="border-white/20 text-white hover:bg-white/10 hover:border-white/40 hover:shadow-sm"
-                  >
-                    <Share className="h-4 w-4 mr-1" />
-                    Share
-                  </Button>
-                </>
-              )}
-            </div>
+            {finalImage && userPhoto && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCompare(!showCompare)}
+                className="border-purple-500/30 text-purple-200 hover:bg-purple-500/20"
+              >
+                <Layers className="w-4 h-4 mr-1" />
+                {showCompare ? 'Hide Compare' : 'Compare'}
+              </Button>
+            )}
           </div>
           
           <AnimatePresence mode="wait">
@@ -87,9 +81,9 @@ const ResultPreviewSection = ({
                 className="flex flex-col items-center justify-center min-h-[400px] p-8"
               >
                 <div className="w-24 h-24 border-4 border-purple-500/30 border-t-purple-500 rounded-full animate-spin mb-6"></div>
-                <h3 className="text-xl font-medium mb-2 text-white">Creating your virtual try-on...</h3>
+                <h3 className="text-xl font-medium mb-2 text-white">Processing your photo...</h3>
                 <p className="text-white/70 text-center max-w-md">
-                  We're generating your personalized outfit preview. This should only take a few seconds.
+                  We're cleaning up the background and preparing your studio-ready preview.
                 </p>
               </motion.div>
             )}
@@ -101,20 +95,45 @@ const ResultPreviewSection = ({
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 key="preview"
-                className="rounded-lg overflow-hidden"
+                className="space-y-6"
               >
-                <div className="aspect-auto max-h-[600px] overflow-hidden flex items-center justify-center rounded-lg">
-                  <motion.img 
-                    src={finalImage} 
-                    alt="Virtual try-on result" 
-                    className="w-full h-auto object-contain max-h-[600px]"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.5 }}
+                {/* Compare mode or single preview */}
+                {showCompare && userPhoto ? (
+                  <BeforeAfterCompare
+                    beforeImage={userPhoto}
+                    afterImage={finalImage}
+                    beforeLabel="Original"
+                    afterLabel="Processed"
+                    filter={currentFilter}
                   />
-                </div>
+                ) : (
+                  <div className="aspect-auto max-h-[600px] overflow-hidden flex items-center justify-center rounded-xl">
+                    <motion.img 
+                      src={finalImage} 
+                      alt="Fit preview result" 
+                      className="w-full h-auto object-contain max-h-[600px] rounded-xl"
+                      style={{ filter: currentFilter }}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.5 }}
+                    />
+                  </div>
+                )}
                 
-                <div className="mt-4 flex flex-col sm:flex-row justify-between items-center gap-3">
+                {/* Studio Presets */}
+                <StudioPresets
+                  activePreset={activePreset}
+                  onPresetChange={setActivePreset}
+                />
+                
+                {/* Export Panel */}
+                <ExportPanel
+                  imageUrl={finalImage}
+                  filter={currentFilter}
+                />
+                
+                {/* Tags & Actions */}
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-3 pt-4 border-t border-white/10">
                   <div className="flex flex-wrap gap-1">
                     {selectedOutfit.seasons?.map(season => (
                       <Badge 
