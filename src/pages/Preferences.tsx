@@ -85,34 +85,27 @@ const Preferences = () => {
       loadUserPreferences();
     }
   }, [user, authLoading]);
-  
-  // If user is not logged in, redirect to auth page
-  if (!authLoading && !user) {
-    toast.error("You need to be logged in to access preferences", {
-      id: "auth-required",
-    });
-    return <Navigate to="/auth" replace />;
-  }
-  
+
   // Memoize this function to prevent unnecessary re-renders
+  // Must be called before any conditional returns (Rules of Hooks)
   const handleSavePreferences = useCallback(async (newPreferences: UserPreferences) => {
     if (!user) {
       toast.error("You need to be logged in to save preferences");
       return;
     }
-    
+
     try {
       console.log("Saving preferences:", newPreferences);
-      
+
       // Update local state with proper type casting
       setPreferences({
         ...newPreferences,
         favoriteColors: newPreferences.favoriteColors as ClothingColor[]
       });
-      
+
       // Save to Supabase
       const { success, error } = await saveUserPreferences(user.id, newPreferences);
-      
+
       if (success) {
         toast.success("Your preferences have been saved successfully!");
       } else {
@@ -124,6 +117,15 @@ const Preferences = () => {
       toast.error("An error occurred while saving your preferences");
     }
   }, [user]);
+
+  // If user is not logged in, redirect to auth page
+  // This conditional render must come AFTER all hooks
+  if (!authLoading && !user) {
+    toast.error("You need to be logged in to access preferences", {
+      id: "auth-required",
+    });
+    return <Navigate to="/auth" replace />;
+  }
 
   const containerVariants = {
     hidden: { opacity: 0 },
