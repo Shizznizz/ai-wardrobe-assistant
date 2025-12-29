@@ -7,6 +7,15 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Observability helper - structured logging (no PII)
+function logEvent(event: string, data: Record<string, any>) {
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    event,
+    ...data
+  }));
+}
+
 interface InstantOutfitRequest {
   styleVibe: string;
   occasion: string;
@@ -38,6 +47,9 @@ serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  const startTime = Date.now();
+  const requestId = crypto.randomUUID();
+
   try {
     const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
@@ -50,6 +62,9 @@ serve(async (req) => {
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { styleVibe, occasion, weather, userId }: InstantOutfitRequest = await req.json();
 
+    let userType = userId ? 'free' : 'logged_out';
+    let isPremium = false;
+
     // Rate limiting for logged-in users
     if (userId) {
       const { data: limitData, error: limitsError } = await supabaseClient
@@ -59,11 +74,11 @@ serve(async (req) => {
         .maybeSingle();
 
       let currentCount = 0;
-      let isPremium = false;
       const today = new Date().toDateString();
 
       if (limitData) {
         isPremium = limitData.is_premium;
+        userType = isPremium ? 'premium' : 'free';
         const lastMessageDate = new Date(limitData.last_message_at).toDateString();
 
         // Reset count if it's a new day
@@ -76,6 +91,14 @@ serve(async (req) => {
 
       // Check if free user has exceeded limit (10 generations/day)
       if (!isPremium && currentCount >= 10) {
+        logEvent('generation_rate_limited', {
+          request_id: requestId,
+          user_type: 'free',
+          current_count: currentCount,
+          limit: 10,
+          duration_ms: Date.now() - startTime
+        });
+
         return new Response(
           JSON.stringify({
             error: 'Generation limit reached',
@@ -111,6 +134,15 @@ serve(async (req) => {
       }
     }
 
+    // Log request start (after determining user type)
+    logEvent('generation_started', {
+      request_id: requestId,
+      user_type: userType,
+      style_vibe: styleVibe,
+      occasion,
+      weather
+    });
+
     // Build the prompt for OpenAI
     const systemPrompt = `You are a professional fashion stylist AI. Generate exactly 3 diverse outfit combinations based on the user's criteria.
 
@@ -143,6 +175,7 @@ Weather: ${weather}
 
 Make them diverse - vary the silhouettes, textures, and key pieces.`;
 
+    const openaiStartTime = Date.now();
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -164,11 +197,23 @@ Make them diverse - vary the silhouettes, textures, and key pieces.`;
     if (!response.ok) {
       const errorText = await response.text();
       console.error('OpenAI API error:', errorText);
+
+      logEvent('openai_call_failed', {
+        request_id: requestId,
+        status: response.status,
+        duration_ms: Date.now() - openaiStartTime
+      });
+
       throw new Error(`OpenAI API error: ${response.status}`);
     }
 
     const data = await response.json();
     const content = data.choices[0].message.content;
+
+    logEvent('openai_call_success', {
+      request_id: requestId,
+      duration_ms: Date.now() - openaiStartTime
+    });
 
     let parsedOutfits;
     try {
@@ -207,6 +252,13 @@ Make them diverse - vary the silhouettes, textures, and key pieces.`;
       }
     }
 
+    logEvent('generation_success', {
+      request_id: requestId,
+      user_type: userType,
+      duration_ms: Date.now() - startTime,
+      outfit_count: outfits.length
+    });
+
     return new Response(
       JSON.stringify(result),
       {
@@ -215,6 +267,12 @@ Make them diverse - vary the silhouettes, textures, and key pieces.`;
       }
     );
   } catch (error) {
+    logEvent('generation_failed', {
+      request_id: requestId,
+      error_message: error.message || 'Unknown error',
+      duration_ms: Date.now() - startTime
+    });
+
     console.error('Error generating instant outfits:', error);
     return new Response(
       JSON.stringify({

@@ -362,11 +362,16 @@ export async function generateInstantOutfits(
   userId?: string
 ): Promise<GenerationResult> {
   const weatherCondition = manualWeather || determineWeatherCondition(weather);
+  const startTime = Date.now();
+
+  // Log generation start (no PII)
+  console.log(`[InstantOutfit] Generation started: ${styleVibe} / ${occasion} / ${weatherCondition} | user=${userId ? 'authenticated' : 'logged_out'}`);
 
   // Rate limiting for logged-out users
   if (!userId) {
     const rateLimit = checkLoggedOutRateLimit();
     if (!rateLimit.allowed) {
+      console.log(`[InstantOutfit] Rate limit hit: logged_out user exceeded 3/day limit`);
       return {
         outfits: [],
         limitReached: true,
@@ -420,6 +425,8 @@ export async function generateInstantOutfits(
       occasion
     }));
 
+    console.log(`[InstantOutfit] Generation success: ${outfits.length} outfits | duration=${Date.now() - startTime}ms | fallback=false`);
+
     return {
       outfits,
       generationsRemaining: data.generationsRemaining,
@@ -427,6 +434,7 @@ export async function generateInstantOutfits(
     };
   } catch (error) {
     console.error('AI generation failed, falling back to static database:', error);
+    console.log(`[InstantOutfit] Generation failed: ${error instanceof Error ? error.message : 'Unknown error'} | duration=${Date.now() - startTime}ms | fallback=true`);
 
     // Fallback to static database
     const staticOutfits = outfitDatabase[styleVibe]?.[occasion]?.[weatherCondition] ||
