@@ -19,7 +19,9 @@ import { CTAButton } from '@/components/ui/cta-button';
 import PremiumTeaserSection from '@/components/home/PremiumTeaserSection';
 import InstantOutfitMoment from '@/components/home/InstantOutfitMoment';
 import HowItWorksMicro from '@/components/home/HowItWorksMicro';
-import { Sparkles } from 'lucide-react';
+import OliviaChatPanel from '@/components/olivia/OliviaChatPanel';
+import { Button } from '@/components/ui/button';
+import { Sparkles, MessageCircle } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { getSupabaseClient } from '@/integrations/supabase/client';
 
@@ -28,9 +30,11 @@ const Home = () => {
   const { isAuthenticated, user } = useAuth();
   const [showOliviaDialog, setShowOliviaDialog] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showOliviaChat, setShowOliviaChat] = useState(false);
   const { hasSeenOnboarding } = useOnboardingState();
   const [hasWardrobeItems, setHasWardrobeItems] = useState(false);
   const [checkingWardrobe, setCheckingWardrobe] = useState(true);
+  const [wardrobeCount, setWardrobeCount] = useState<number | null>(null);
   
   const handleStartJourney = () => {
     navigate('/my-wardrobe');
@@ -77,6 +81,12 @@ const Home = () => {
 
         if (!clothingError && clothingData) {
           setHasWardrobeItems(true);
+          // Get actual count for chat context
+          const { count } = await supabase
+            .from('clothing_items')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', user.id);
+          setWardrobeCount(count || 0);
           setCheckingWardrobe(false);
           return;
         }
@@ -144,6 +154,22 @@ const Home = () => {
         {/* 2.5 Instant Outfit Moment - for first-time users */}
         {showInstantOutfit && <InstantOutfitMoment hasWardrobeItems={hasWardrobeItems} />}
 
+        {/* 2.55 Chat with Olivia CTA - after Instant Outfit */}
+        {showInstantOutfit && (
+          <section className="container mx-auto px-4 py-8">
+            <div className="flex justify-center">
+              <Button
+                onClick={() => setShowOliviaChat(true)}
+                className="bg-gradient-to-r from-purple-600 to-coral-500 hover:from-purple-700 hover:to-coral-600 text-white font-semibold px-8 py-6 rounded-xl shadow-lg hover:shadow-xl transition-all"
+                size="lg"
+              >
+                <MessageCircle className="w-5 h-5 mr-2" />
+                Chat with Olivia
+              </Button>
+            </div>
+          </section>
+        )}
+
         {/* 2.6 How It Works Micro - right after Instant Outfit */}
         {showInstantOutfit && <HowItWorksMicro />}
 
@@ -181,6 +207,13 @@ const Home = () => {
       <OnboardingFlow 
         isOpen={showOnboarding} 
         onClose={() => setShowOnboarding(false)} 
+      />
+
+      {/* Olivia Chat Panel */}
+      <OliviaChatPanel
+        isOpen={showOliviaChat}
+        onClose={() => setShowOliviaChat(false)}
+        wardrobeCount={wardrobeCount}
       />
     </div>
   );
