@@ -95,13 +95,41 @@ npm run typecheck    # Run TypeScript type checking (no emit)
 
 All environment variables must be prefixed with `VITE_` for Vite to expose them to the client.
 
-Create a `.env` file in the project root with the following variables (see `.env.example`):
+### Required Variables
 
-| Variable | Purpose |
-|----------|---------|
-| `VITE_SUPABASE_URL` | Your Supabase project URL |
-| `VITE_SUPABASE_PUBLISHABLE_KEY` | Supabase anon/public API key (safe for client-side) |
-| `VITE_SUPABASE_PROJECT_ID` | Supabase project identifier |
+| Variable | Purpose | Required |
+|----------|---------|----------|
+| `VITE_SUPABASE_URL` | Your Supabase project URL (e.g., `https://xxxxx.supabase.co`) | ✅ Yes |
+| `VITE_SUPABASE_ANON_KEY` | Supabase anon/public API key (safe for client-side) | ✅ Yes |
+| `VITE_SUPABASE_PROJECT_ID` | Supabase project identifier (optional, for advanced features) | ❌ Optional |
+
+### Environment Setup
+
+#### Local Development
+
+1. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Fill in your Supabase credentials in `.env`:
+   ```bash
+   VITE_SUPABASE_URL=https://your-project.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-anon-key-here
+   ```
+
+3. Get your credentials from [Supabase Dashboard](https://supabase.com/dashboard):
+   - Go to **Project Settings** → **API**
+   - Copy **Project URL** → `VITE_SUPABASE_URL`
+   - Copy **anon/public key** → `VITE_SUPABASE_ANON_KEY`
+
+#### Deployment (Lovable/Vercel/Netlify)
+
+Set environment variables in your hosting platform's dashboard:
+
+- **Lovable**: Project Settings → Environment Variables
+- **Vercel**: Project Settings → Environment Variables
+- **Netlify**: Site Settings → Build & Deploy → Environment
 
 **Security**: Never commit the `.env` file to version control. It is listed in `.gitignore`.
 
