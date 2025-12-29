@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Sparkles, Upload, Heart, Loader2, CloudRain, Sun, Cloud, Snowflake } from 'lucide-react';
 import {
@@ -32,7 +33,7 @@ const weatherIcons: Record<WeatherCondition, any> = {
 };
 
 export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitMomentProps) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const navigate = useNavigate();
 
   const [selectedVibe, setSelectedVibe] = useState<StyleVibe>('Minimalist');
@@ -61,6 +62,51 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
     fetchWeather();
   }, []);
 
+  // Fetch saved instant outfits for logged-in users
+  useEffect(() => {
+    const fetchSavedOutfits = async () => {
+      if (!isAuthenticated || !user?.id || generatedOutfits.length === 0) {
+        return;
+      }
+
+      try {
+        // Create a unique key for each outfit based on its content
+        const outfitKeys = generatedOutfits.map(outfit =>
+          `${outfit.styleVibe}|${outfit.occasion}|${outfit.title}`
+        );
+
+        // Query saved instant outfits that match current generated outfits
+        const { data, error } = await supabase
+          .from('instant_outfits_saved')
+          .select('id, style_vibe, occasion, title')
+          .eq('user_id', user.id);
+
+        if (error) {
+          console.error('Error fetching saved instant outfits:', error);
+          return;
+        }
+
+        // Build a set of saved outfit IDs by matching content
+        const savedIds = new Set<string>();
+        data?.forEach(saved => {
+          const savedKey = `${saved.style_vibe}|${saved.occasion}|${saved.title}`;
+          generatedOutfits.forEach(outfit => {
+            const outfitKey = `${outfit.styleVibe}|${outfit.occasion}|${outfit.title}`;
+            if (outfitKey === savedKey) {
+              savedIds.add(outfit.id);
+            }
+          });
+        });
+
+        setSavedOutfits(savedIds);
+      } catch (error) {
+        console.error('Exception fetching saved outfits:', error);
+      }
+    };
+
+    fetchSavedOutfits();
+  }, [isAuthenticated, user?.id, generatedOutfits]);
+
   const handleGenerate = async () => {
     setIsGenerating(true);
 
@@ -85,7 +131,7 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
     }
   };
 
-  const handleSaveOutfit = (outfitId: string) => {
+  const handleSaveOutfit = async (outfitId: string) => {
     if (!isAuthenticated) {
       toast.info('Sign up to save your favorite outfits!', {
         action: {
@@ -96,9 +142,72 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
       return;
     }
 
-    // In a real app, save to database
-    setSavedOutfits(prev => new Set(prev).add(outfitId));
-    toast.success('Outfit saved to your collection!');
+    if (!user?.id) {
+      toast.error('User not found. Please log in again.');
+      return;
+    }
+
+    const outfit = generatedOutfits.find(o => o.id === outfitId);
+    if (!outfit) {
+      toast.error('Outfit not found.');
+      return;
+    }
+
+    const isSaved = savedOutfits.has(outfitId);
+
+    try {
+      if (isSaved) {
+        // Unsave: Delete from database
+        const { error } = await supabase
+          .from('instant_outfits_saved')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('style_vibe', outfit.styleVibe)
+          .eq('occasion', outfit.occasion)
+          .eq('title', outfit.title);
+
+        if (error) {
+          console.error('Error unsaving outfit:', error);
+          toast.error('Failed to unsave outfit. Please try again.');
+          return;
+        }
+
+        // Update local state
+        setSavedOutfits(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(outfitId);
+          return newSet;
+        });
+
+        toast.success('Outfit removed from your collection.');
+      } else {
+        // Save: Insert into database
+        const { error } = await supabase
+          .from('instant_outfits_saved')
+          .insert({
+            user_id: user.id,
+            style_vibe: outfit.styleVibe,
+            occasion: outfit.occasion,
+            weather: currentWeather,
+            title: outfit.title,
+            items: outfit.items,
+            reasoning: outfit.reasoning
+          });
+
+        if (error) {
+          console.error('Error saving outfit:', error);
+          toast.error('Failed to save outfit. Please try again.');
+          return;
+        }
+
+        // Update local state
+        setSavedOutfits(prev => new Set(prev).add(outfitId));
+        toast.success('Outfit saved to your collection!');
+      }
+    } catch (error) {
+      console.error('Exception handling save/unsave:', error);
+      toast.error('An unexpected error occurred. Please try again.');
+    }
   };
 
   const currentWeather = manualWeather || (autoWeather ? determineWeatherLabel(autoWeather) : 'Sunny');
@@ -257,11 +366,15 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
                     <Button
                       onClick={() => handleSaveOutfit(outfit.id)}
                       variant="outline"
-                      className="w-full border-coral-400/30 text-coral-300 hover:bg-coral-400/20 hover:border-coral-400/50"
-                      disabled={savedOutfits.has(outfit.id)}
+                      className={cn(
+                        'w-full transition-all duration-200',
+                        savedOutfits.has(outfit.id)
+                          ? 'border-coral-400 bg-coral-400/20 text-coral-300 hover:bg-coral-400/10'
+                          : 'border-coral-400/30 text-coral-300 hover:bg-coral-400/20 hover:border-coral-400/50'
+                      )}
                     >
                       <Heart className={cn('w-4 h-4 mr-2', savedOutfits.has(outfit.id) && 'fill-coral-400')} />
-                      {savedOutfits.has(outfit.id) ? 'Saved' : 'Save Outfit'}
+                      {savedOutfits.has(outfit.id) ? 'Unsave' : 'Save Outfit'}
                     </Button>
                   </CardFooter>
                 </Card>
