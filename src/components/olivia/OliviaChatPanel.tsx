@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Send, Trash2, Loader2, AlertCircle, Sparkles, Crown, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -145,11 +145,18 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
     }
   }, [isOpen]);
 
-  const getCurrentRoute = (): string => {
+  // Memoize route name to avoid unstable function dependencies
+  const routeName = useMemo(() => {
     const path = location.pathname;
     if (path === '/') return 'home';
     if (path === '/style-planner') return 'style-planner';
     return path.replace('/', '') || 'unknown';
+  }, [location.pathname]);
+
+  // Dev-only: reset guest limit
+  const resetGuestLimit = () => {
+    localStorage.removeItem(GUEST_LIMIT_KEY);
+    setStatus('ok');
   };
 
   const sendMessage = useCallback(async () => {
@@ -194,7 +201,7 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
             messages: apiMessages,
             userId: null, // Guest mode
             context: {
-              route: getCurrentRoute(),
+              route: routeName,
               wardrobeCount: null,
               quizSummary: null,
               isGuest: true,
@@ -237,7 +244,7 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
       }));
 
       const context = {
-        route: getCurrentRoute(),
+        route: routeName,
         wardrobeCount,
         quizSummary,
       };
@@ -288,7 +295,7 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
     } finally {
       setIsLoading(false);
     }
-  }, [inputValue, isLoading, messages, user?.id, isAuthenticated, wardrobeCount, quizSummary, getCurrentRoute]);
+  }, [inputValue, isLoading, messages, user?.id, isAuthenticated, wardrobeCount, quizSummary, routeName]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -366,6 +373,15 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {import.meta.env.DEV && (
+                  <button
+                    onClick={resetGuestLimit}
+                    className="text-xs text-purple-400/60 hover:text-purple-300 px-2 py-1"
+                    title="Dev only: Reset guest limit"
+                  >
+                    Reset guest
+                  </button>
+                )}
                 <Button
                   variant="ghost"
                   size="icon"
