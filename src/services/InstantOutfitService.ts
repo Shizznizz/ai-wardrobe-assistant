@@ -1,4 +1,5 @@
 import { WeatherInfo } from '@/lib/types';
+import { supabase } from '@/integrations/supabase/client';
 
 export interface InstantOutfit {
   id: string;
@@ -7,11 +8,20 @@ export interface InstantOutfit {
   reasoning: string;
   styleVibe: string;
   occasion: string;
+  palette?: string[];
+  doNotWear?: string[];
 }
 
 export type StyleVibe = 'Minimalist' | 'Boho Chic' | 'Sporty' | 'Edgy' | 'Classic' | 'Romantic';
 export type Occasion = 'Work' | 'Casual' | 'Date Night' | 'Weekend';
 export type WeatherCondition = 'Sunny' | 'Rainy' | 'Cold' | 'Hot';
+
+interface GenerationResult {
+  outfits: InstantOutfit[];
+  limitReached?: boolean;
+  generationsRemaining?: number;
+  usedFallback?: boolean;
+}
 
 const outfitDatabase: Record<string, Record<string, Record<string, InstantOutfit[]>>> = {
   Minimalist: {
@@ -299,24 +309,134 @@ function determineWeatherCondition(weather: WeatherInfo | null): WeatherConditio
   return 'Sunny';
 }
 
-export function generateInstantOutfits(
+// localStorage rate limiting for logged-out users
+const STORAGE_KEY = 'instant_outfit_generations';
+const MAX_LOGGED_OUT_GENERATIONS = 3;
+
+function checkLoggedOutRateLimit(): { allowed: boolean; remaining: number } {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    const data = stored ? JSON.parse(stored) : { count: 0, date: new Date().toDateString() };
+
+    const today = new Date().toDateString();
+
+    // Reset if new day
+    if (data.date !== today) {
+      data.count = 0;
+      data.date = today;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    }
+
+    const remaining = Math.max(0, MAX_LOGGED_OUT_GENERATIONS - data.count);
+    return {
+      allowed: data.count < MAX_LOGGED_OUT_GENERATIONS,
+      remaining
+    };
+  } catch (error) {
+    console.error('Error checking logged-out rate limit:', error);
+    return { allowed: true, remaining: MAX_LOGGED_OUT_GENERATIONS };
+  }
+}
+
+function incrementLoggedOutGenerations(): void {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    const data = stored ? JSON.parse(stored) : { count: 0, date: new Date().toDateString() };
+
+    data.count += 1;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (error) {
+    console.error('Error incrementing logged-out generations:', error);
+  }
+}
+
+/**
+ * Generate instant outfits using AI (OpenAI via Edge Function)
+ * Falls back to static database if AI generation fails
+ */
+export async function generateInstantOutfits(
   styleVibe: StyleVibe,
   occasion: Occasion,
   weather: WeatherInfo | null,
-  manualWeather?: WeatherCondition
-): InstantOutfit[] {
+  manualWeather?: WeatherCondition,
+  userId?: string
+): Promise<GenerationResult> {
   const weatherCondition = manualWeather || determineWeatherCondition(weather);
 
-  // Get outfits from database
-  const outfits = outfitDatabase[styleVibe]?.[occasion]?.[weatherCondition] || [];
-
-  // If we have outfits for this combination, return up to 3
-  if (outfits.length > 0) {
-    return outfits.slice(0, 3);
+  // Rate limiting for logged-out users
+  if (!userId) {
+    const rateLimit = checkLoggedOutRateLimit();
+    if (!rateLimit.allowed) {
+      return {
+        outfits: [],
+        limitReached: true,
+        generationsRemaining: 0,
+        usedFallback: false
+      };
+    }
   }
 
-  // Fallback: generate generic outfits
-  return generateFallbackOutfits(styleVibe, occasion, weatherCondition);
+  // Try AI generation first
+  try {
+    const { data, error } = await supabase.functions.invoke('generate-instant-outfits', {
+      body: {
+        styleVibe,
+        occasion,
+        weather: weatherCondition,
+        userId
+      }
+    });
+
+    if (error) {
+      console.error('Error calling generate-instant-outfits function:', error);
+      throw error;
+    }
+
+    if (data?.error) {
+      console.error('Function returned error:', data.error);
+      throw new Error(data.error);
+    }
+
+    // Check if rate limit reached
+    if (data?.limitReached) {
+      return {
+        outfits: [],
+        limitReached: true,
+        generationsRemaining: data.generationsRemaining || 0,
+        usedFallback: false
+      };
+    }
+
+    // Increment logged-out user count
+    if (!userId) {
+      incrementLoggedOutGenerations();
+    }
+
+    // Add IDs and metadata to AI-generated outfits
+    const outfits = data.outfits.map((outfit: any, index: number) => ({
+      ...outfit,
+      id: `ai-${Date.now()}-${index}`,
+      styleVibe,
+      occasion
+    }));
+
+    return {
+      outfits,
+      generationsRemaining: data.generationsRemaining,
+      usedFallback: false
+    };
+  } catch (error) {
+    console.error('AI generation failed, falling back to static database:', error);
+
+    // Fallback to static database
+    const staticOutfits = outfitDatabase[styleVibe]?.[occasion]?.[weatherCondition] ||
+                         generateFallbackOutfits(styleVibe, occasion, weatherCondition);
+
+    return {
+      outfits: staticOutfits.slice(0, 3),
+      usedFallback: true
+    };
+  }
 }
 
 function generateFallbackOutfits(

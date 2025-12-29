@@ -110,19 +110,56 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
   const handleGenerate = async () => {
     setIsGenerating(true);
 
-    // Simulate API delay for realism
-    await new Promise(resolve => setTimeout(resolve, 1500));
-
     try {
-      const outfits = generateInstantOutfits(
+      const result = await generateInstantOutfits(
         selectedVibe,
         selectedOccasion,
         autoWeather,
-        manualWeather || undefined
+        manualWeather || undefined,
+        user?.id
       );
 
-      setGeneratedOutfits(outfits);
-      toast.success('3 outfits generated just for you!');
+      // Handle rate limiting
+      if (result.limitReached) {
+        if (isAuthenticated) {
+          toast.error('Daily generation limit reached!', {
+            description: 'Upgrade to premium for unlimited outfit generations.',
+            action: {
+              label: 'Upgrade',
+              onClick: () => navigate('/premium')
+            }
+          });
+        } else {
+          toast.error('Daily generation limit reached!', {
+            description: `Free users get 3 generations per day. Sign up for more!`,
+            action: {
+              label: 'Sign Up',
+              onClick: () => navigate('/auth')
+            }
+          });
+        }
+        return;
+      }
+
+      setGeneratedOutfits(result.outfits);
+
+      // Show success message with fallback notice if needed
+      if (result.usedFallback) {
+        toast.success('3 outfits generated!', {
+          description: 'Using curated suggestions (AI temporarily unavailable)'
+        });
+      } else {
+        toast.success('3 AI-powered outfits generated just for you!');
+      }
+
+      // Show remaining generations for logged-in users
+      if (isAuthenticated && result.generationsRemaining !== undefined) {
+        if (result.generationsRemaining <= 2) {
+          toast.info(`${result.generationsRemaining} generations remaining today`, {
+            description: 'Upgrade to premium for unlimited generations!'
+          });
+        }
+      }
     } catch (error) {
       console.error('Failed to generate outfits:', error);
       toast.error('Failed to generate outfits. Please try again.');
