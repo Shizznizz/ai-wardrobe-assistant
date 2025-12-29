@@ -1,7 +1,7 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ImageOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -38,6 +38,7 @@ const MobileHeroSection = ({
   mainActionLabel,
   onMainAction,
 }: MobileHeroSectionProps) => {
+  const [imageError, setImageError] = useState(false);
   
   const itemVariants = {
     hidden: { y: 20, opacity: 0 },
@@ -76,7 +77,7 @@ const MobileHeroSection = ({
         {title}
       </motion.h1>
       
-      {/* 2. Olivia Image */}
+      {/* 2. Olivia Image with fallback */}
       <motion.div 
         className="w-full flex justify-center mb-6"
         variants={{
@@ -92,12 +93,23 @@ const MobileHeroSection = ({
           }
         }}
       >
-        <img 
-          src={imageSrc} 
-          alt={imageAlt}
-          fetchPriority="high"
-          className="max-h-[300px] w-full object-contain drop-shadow-lg" 
-        />
+        {imageError ? (
+          <div 
+            className="max-h-[300px] w-full flex items-center justify-center bg-white/5 rounded-xl border border-white/10"
+            role="img"
+            aria-label={imageAlt}
+          >
+            <ImageOff className="w-12 h-12 text-white/30" aria-hidden="true" />
+          </div>
+        ) : (
+          <img 
+            src={imageSrc} 
+            alt={imageAlt}
+            fetchPriority="high"
+            className="max-h-[300px] w-full object-contain drop-shadow-lg"
+            onError={() => setImageError(true)}
+          />
+        )}
       </motion.div>
       
       {/* 3. Subheadline - MADE SMALLER */}
@@ -127,6 +139,7 @@ const MobileHeroSection = ({
           <Button
             key={index}
             onClick={button.onClick}
+            aria-label={button.label}
             className={cn(
               "hover:opacity-90 transition-opacity text-white font-semibold py-3 px-6 rounded-xl shadow-md min-h-[44px] w-full text-base",
               button.variant === 'secondary' 
@@ -145,6 +158,7 @@ const MobileHeroSection = ({
         {mainActionLabel && onMainAction && (
           <Button
             onClick={onMainAction}
+            aria-label={mainActionLabel}
             className="bg-gradient-to-r from-[#EC6FF1] to-[#FF8AF0] hover:opacity-90 transition-opacity text-white font-semibold py-3 px-6 rounded-xl shadow-md min-h-[44px] w-full text-base mt-4"
             size="lg"
           >

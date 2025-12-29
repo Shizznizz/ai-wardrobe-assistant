@@ -18,6 +18,7 @@ import OliviasLookOfTheWeek from '@/components/home/OliviasLookOfTheWeek';
 import { CTAButton } from '@/components/ui/cta-button';
 import PremiumTeaserSection from '@/components/home/PremiumTeaserSection';
 import InstantOutfitMoment from '@/components/home/InstantOutfitMoment';
+import HowItWorksMicro from '@/components/home/HowItWorksMicro';
 import { Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { getSupabaseClient } from '@/integrations/supabase/client';
@@ -123,6 +124,18 @@ const Home = () => {
           onStartJourney={handleStartJourney}
           onTakeStyleQuiz={handleTakeStyleQuiz}
           hasSparkleEffect={true}
+          buttons={[
+            {
+              label: "Generate 3 AI Outfits",
+              onClick: handleStartJourney,
+              variant: 'primary' as const,
+            },
+            {
+              label: "Take Style Quiz",
+              onClick: handleTakeStyleQuiz,
+              variant: 'secondary' as const,
+            }
+          ]}
         />
         
         {/* 2. Trust Bar from home.tsx */}
@@ -130,6 +143,9 @@ const Home = () => {
 
         {/* 2.5 Instant Outfit Moment - for first-time users */}
         {showInstantOutfit && <InstantOutfitMoment hasWardrobeItems={hasWardrobeItems} />}
+
+        {/* 2.6 How It Works Micro - right after Instant Outfit */}
+        {showInstantOutfit && <HowItWorksMicro />}
 
         {/* 3. Core Features Section with Meet Olivia button from home.tsx */}
         <CoreFeaturesSection onMeetOlivia={handleMeetOlivia} />

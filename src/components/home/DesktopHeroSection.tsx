@@ -1,7 +1,7 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ImageOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -42,6 +42,7 @@ const DesktopHeroSection = ({
   mainActionLabel,
   onMainAction,
 }: DesktopHeroSectionProps) => {
+  const [imageError, setImageError] = useState(false);
   
   const itemVariants = {
     hidden: { y: 20, opacity: 0 },
@@ -142,6 +143,7 @@ const DesktopHeroSection = ({
             <Button
               key={index}
               onClick={button.onClick}
+              aria-label={button.label}
               className={cn(
                 "hover:opacity-90 transition-opacity text-white font-semibold py-3 px-6 rounded-xl shadow-md min-h-[44px]",
                 button.variant === 'secondary' 
@@ -157,12 +159,12 @@ const DesktopHeroSection = ({
           ))}
         </motion.div>
         
-        {/* Additional action button if provided */}
         {mainActionLabel && onMainAction && (
           <motion.div variants={itemVariants} className="pt-6">
             <Button 
               className="bg-gradient-to-r from-[#EC6FF1] to-[#FF8AF0] text-white hover:opacity-90 transition-opacity font-semibold py-6 px-8 rounded-xl shadow-md h-auto text-lg min-h-[44px]"
               onClick={onMainAction}
+              aria-label={mainActionLabel}
             >
               {mainActionLabel}
             </Button>
@@ -194,13 +196,24 @@ const DesktopHeroSection = ({
           <div className="absolute inset-0 -z-5 rounded-full border border-coral-400/10 animate-pulse-glow"></div>
           <div className="absolute inset-2 -z-5 rounded-full border border-purple-400/5"></div>
           
-          {/* The image */}
-          <img 
-            src={imageSrc} 
-            alt={imageAlt}
-            fetchPriority="high"
-            className="drop-shadow-lg animate-float object-contain max-h-[350px] lg:max-h-[450px] w-auto"
-          />
+          {/* The image with fallback */}
+          {imageError ? (
+            <div 
+              className="drop-shadow-lg max-h-[350px] lg:max-h-[450px] w-auto flex items-center justify-center bg-white/5 rounded-xl border border-white/10 px-16"
+              role="img"
+              aria-label={imageAlt}
+            >
+              <ImageOff className="w-16 h-16 text-white/30" aria-hidden="true" />
+            </div>
+          ) : (
+            <img 
+              src={imageSrc} 
+              alt={imageAlt}
+              fetchPriority="high"
+              className="drop-shadow-lg animate-float object-contain max-h-[350px] lg:max-h-[450px] w-auto"
+              onError={() => setImageError(true)}
+            />
+          )}
           
           {/* Subtle light effect */}
           <div className="absolute top-0 right-1/4 w-10 h-10 bg-white/10 rounded-full blur-xl"></div>

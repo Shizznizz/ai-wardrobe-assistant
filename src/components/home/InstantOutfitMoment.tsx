@@ -137,23 +137,20 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
 
       // Handle rate limiting
       if (result.limitReached) {
-        if (isAuthenticated) {
-          toast.error('Daily generation limit reached!', {
-            description: 'Upgrade to premium for unlimited outfit generations.',
-            action: {
-              label: 'Upgrade',
-              onClick: () => navigate('/premium')
-            }
-          });
-        } else {
-          toast.error('Daily generation limit reached!', {
-            description: `Free users get 3 generations per day. Sign up for more!`,
-            action: {
-              label: 'Sign Up',
-              onClick: () => navigate('/auth')
-            }
-          });
-        }
+        const limitMessage = isAuthenticated
+          ? "You've reached today's limit. Upgrade for unlimited generations!"
+          : 'Free limit reached! Sign up for 10 free generations per day.';
+        const limitAction = isAuthenticated ? '/premium' : '/auth';
+        const limitLabel = isAuthenticated ? 'Go Premium' : 'Sign Up Free';
+        
+        setGenerationError(limitMessage);
+        toast.error('Generation limit reached', {
+          description: limitMessage,
+          action: {
+            label: limitLabel,
+            onClick: () => navigate(limitAction)
+          }
+        });
         return;
       }
 
@@ -273,20 +270,26 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
   const currentWeather = manualWeather || (autoWeather ? determineWeatherLabel(autoWeather) : 'Sunny');
 
   return (
-    <section className="py-16 px-4 bg-gradient-to-b from-[#1b013c] to-[#12002f]">
+    <section 
+      className="py-16 px-4 bg-gradient-to-b from-[#1b013c] to-[#12002f]"
+      aria-labelledby="instant-outfit-heading"
+    >
       <div className="max-w-6xl mx-auto">
         {/* Header */}
-        <div className="text-center mb-12">
+        <header className="text-center mb-12">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <Sparkles className="w-8 h-8 text-coral-400" />
-            <h2 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-coral-400 to-purple-400 bg-clip-text text-transparent">
+            <Sparkles className="w-8 h-8 text-coral-400" aria-hidden="true" />
+            <h2 
+              id="instant-outfit-heading"
+              className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-coral-400 to-purple-400 bg-clip-text text-transparent"
+            >
               Instant Outfit Moment
             </h2>
           </div>
           <p className="text-lg text-white/80 max-w-2xl mx-auto">
             Get 3 personalized outfit ideas in seconds. No wardrobe upload needed—just pick your vibe!
           </p>
-        </div>
+        </header>
 
         {/* Selectors */}
         <div className="space-y-6 mb-8">
@@ -426,17 +429,18 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
             onClick={handleGenerate}
             disabled={isGenerating}
             size="lg"
+            aria-label="Generate 3 AI outfit suggestions"
             className="bg-gradient-to-r from-coral-500 to-coral-400 hover:from-coral-400 hover:to-coral-300 text-white font-semibold px-8 py-6 text-lg rounded-xl shadow-lg hover:shadow-coral transition-all duration-300 disabled:opacity-50"
           >
             {isGenerating ? (
               <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                Generating Your Outfits...
+                <Loader2 className="w-5 h-5 mr-2 animate-spin" aria-hidden="true" />
+                <span>Generating Your Outfits...</span>
               </>
             ) : (
               <>
-                <Sparkles className="w-5 h-5 mr-2" />
-                Generate 3 Outfits
+                <Sparkles className="w-5 h-5 mr-2" aria-hidden="true" />
+                <span>Generate 3 AI Outfits</span>
               </>
             )}
           </Button>
@@ -444,15 +448,31 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
 
         {/* Error State */}
         {generationError && (
-          <div className="mb-8 p-6 bg-red-500/10 border border-red-400/30 rounded-xl text-center">
+          <div 
+            className="mb-8 p-6 bg-red-500/10 border border-red-400/30 rounded-xl text-center"
+            role="alert"
+            aria-live="polite"
+          >
             <p className="text-red-300 mb-4">{generationError}</p>
-            <Button
-              onClick={handleGenerate}
-              variant="outline"
-              className="border-red-400/50 text-red-300 hover:bg-red-400/20"
-            >
-              Try Again
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button
+                onClick={handleGenerate}
+                variant="outline"
+                aria-label="Try generating outfits again"
+                className="border-red-400/50 text-red-300 hover:bg-red-400/20"
+              >
+                Try Again
+              </Button>
+              {generationError.includes('limit') && (
+                <Button
+                  onClick={() => navigate(isAuthenticated ? '/premium' : '/auth')}
+                  className="bg-gradient-to-r from-coral-500 to-coral-400 text-white"
+                  aria-label={isAuthenticated ? 'Upgrade to premium' : 'Sign up for free'}
+                >
+                  {isAuthenticated ? 'Go Premium' : 'Sign Up Free'}
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
