@@ -21,10 +21,60 @@ interface OliviaChatPanelProps {
   quizSummary?: string | null;
 }
 
+type ChatStatus = 'ok' | 'auth_required' | 'rate_limited' | 'error';
+
 const STORAGE_KEY_PREFIX = 'olivia_chat:';
+const GUEST_LIMIT_KEY = 'olivia_guest_limit';
+const GUEST_DAILY_LIMIT = 2;
 
 const getStorageKey = (userId?: string | null): string => {
   return `${STORAGE_KEY_PREFIX}${userId || 'guest'}`;
+};
+
+// Guest rate limiting via localStorage
+const getGuestUsage = (): { count: number; date: string } => {
+  try {
+    const stored = localStorage.getItem(GUEST_LIMIT_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    console.error('[OliviaChat] Failed to read guest usage:', e);
+  }
+  return { count: 0, date: new Date().toDateString() };
+};
+
+const incrementGuestUsage = (): number => {
+  const today = new Date().toDateString();
+  const usage = getGuestUsage();
+  
+  // Reset if new day
+  if (usage.date !== today) {
+    usage.count = 0;
+    usage.date = today;
+  }
+  
+  usage.count += 1;
+  
+  try {
+    localStorage.setItem(GUEST_LIMIT_KEY, JSON.stringify(usage));
+  } catch (e) {
+    console.error('[OliviaChat] Failed to save guest usage:', e);
+  }
+  
+  return usage.count;
+};
+
+const checkGuestCanSend = (): boolean => {
+  const today = new Date().toDateString();
+  const usage = getGuestUsage();
+  
+  // Reset count if new day
+  if (usage.date !== today) {
+    return true;
+  }
+  
+  return usage.count < GUEST_DAILY_LIMIT;
 };
 
 const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
@@ -41,7 +91,7 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [limitReached, setLimitReached] = useState(false);
+  const [status, setStatus] = useState<ChatStatus>('ok');
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -72,6 +122,17 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
     }
   }, [messages, user?.id]);
 
+  // Check guest limit on open
+  useEffect(() => {
+    if (isOpen && !isAuthenticated) {
+      if (!checkGuestCanSend()) {
+        setStatus('auth_required');
+      } else {
+        setStatus('ok');
+      }
+    }
+  }, [isOpen, isAuthenticated]);
+
   // Auto-scroll to bottom
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -95,15 +156,7 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
     const trimmedMessage = inputValue.trim();
     if (!trimmedMessage || isLoading) return;
 
-    // Check if logged in - edge function requires userId
-    if (!isAuthenticated || !user?.id) {
-      setError('Please sign in to chat with Olivia.');
-      setLimitReached(true);
-      return;
-    }
-
     setError(null);
-    setLimitReached(false);
     setIsLoading(true);
     setInputValue('');
 
@@ -124,13 +177,65 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
         throw new Error('Unable to connect to services');
       }
 
-      // Build messages array for API (last 10 for context)
+      // Guest flow: use simple AI response without backend user context
+      if (!isAuthenticated || !user?.id) {
+        // Increment guest usage
+        const newCount = incrementGuestUsage();
+        
+        // Build messages array for API (last 6 for context)
+        const apiMessages = updatedMessages.slice(-6).map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
+
+        // Call edge function without userId (guest mode)
+        const { data, error: fnError } = await supabase.functions.invoke('chat-with-olivia', {
+          body: {
+            messages: apiMessages,
+            userId: null, // Guest mode
+            context: {
+              route: getCurrentRoute(),
+              wardrobeCount: null,
+              quizSummary: null,
+              isGuest: true,
+            },
+          },
+        });
+
+        // Handle response - guest users won't get rate limit from backend since userId is required
+        if (fnError) {
+          // The backend requires userId, so for guests we'll use a simple fallback
+          const guestResponse: Message = {
+            id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: "Hi! I'm Olivia, your AI stylist. To give you personalized outfit recommendations based on your wardrobe, I'll need you to create an account. But feel free to ask me general fashion questions! 💫",
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, guestResponse]);
+        } else if (data?.reply) {
+          const assistantMessage: Message = {
+            id: `assistant-${Date.now()}`,
+            role: 'assistant',
+            content: data.reply,
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, assistantMessage]);
+        }
+
+        // Check if guest hit their limit after this message
+        if (newCount >= GUEST_DAILY_LIMIT) {
+          setStatus('auth_required');
+        }
+        
+        return;
+      }
+
+      // Authenticated flow
       const apiMessages = updatedMessages.slice(-10).map((m) => ({
         role: m.role,
         content: m.content,
       }));
 
-      // Build context
       const context = {
         route: getCurrentRoute(),
         wardrobeCount,
@@ -150,9 +255,9 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
         throw new Error(fnError.message || 'Failed to get response');
       }
 
-      // Handle rate limit
+      // Handle rate limit from backend
       if (data?.limitReached || data?.error === 'Message limit reached') {
-        setLimitReached(true);
+        setStatus('rate_limited');
         setError('Daily chat limit reached. Upgrade to Premium for unlimited chats.');
         return;
       }
@@ -170,14 +275,16 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
       };
       
       setMessages((prev) => [...prev, assistantMessage]);
+      setStatus('ok');
 
-      // Check if limit reached after this message
+      // Check if limit will be reached after this message
       if (data?.limitReached) {
-        setLimitReached(true);
+        setStatus('rate_limited');
       }
     } catch (err) {
       console.error('[OliviaChat] Error sending message:', err);
       setError(err instanceof Error ? err.message : 'Something went wrong. Please try again.');
+      setStatus('error');
     } finally {
       setIsLoading(false);
     }
@@ -193,7 +300,10 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
   const clearChat = () => {
     setMessages([]);
     setError(null);
-    setLimitReached(false);
+    // Reset status only if not auth_required due to guest limit
+    if (isAuthenticated || checkGuestCanSend()) {
+      setStatus('ok');
+    }
     const storageKey = getStorageKey(user?.id);
     localStorage.removeItem(storageKey);
   };
@@ -202,13 +312,21 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
     if (messages.length > 0) {
       const lastUserMessage = [...messages].reverse().find((m) => m.role === 'user');
       if (lastUserMessage) {
-        // Remove the last user message and resend
         setMessages((prev) => prev.filter((m) => m.id !== lastUserMessage.id));
         setInputValue(lastUserMessage.content);
         setError(null);
+        if (status === 'error') {
+          setStatus('ok');
+        }
       }
     }
   };
+
+  // Determine if input should be disabled
+  const isInputDisabled = 
+    isLoading || 
+    status === 'rate_limited' || 
+    (status === 'auth_required' && !checkGuestCanSend());
 
   return (
     <AnimatePresence>
@@ -232,9 +350,7 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
             className={cn(
               "fixed z-50 bg-slate-900/95 backdrop-blur-xl border-l border-purple-500/30",
               "flex flex-col shadow-2xl",
-              // Desktop: right side panel
               "md:right-0 md:top-0 md:bottom-0 md:w-[420px]",
-              // Mobile: bottom sheet
               "max-md:bottom-0 max-md:left-0 max-md:right-0 max-md:top-[15%] max-md:rounded-t-3xl max-md:border-t"
             )}
           >
@@ -313,60 +429,61 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
                 </div>
               )}
 
-              {/* Error State */}
-              {error && (
+              {/* Error State (generic errors only) */}
+              {error && status === 'error' && (
                 <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
                   <div className="flex items-start gap-3">
                     <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
                     <div className="flex-1">
                       <p className="text-red-200 text-sm">{error}</p>
-                      {!limitReached && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={retryLastMessage}
-                          className="mt-2 text-red-300 hover:text-white hover:bg-red-500/20"
-                        >
-                          Try again
-                        </Button>
-                      )}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={retryLastMessage}
+                        className="mt-2 text-red-300 hover:text-white hover:bg-red-500/20"
+                      >
+                        Try again
+                      </Button>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Rate Limit CTA */}
-              {limitReached && (
+              {/* Auth Required CTA (for guests who hit limit) */}
+              {status === 'auth_required' && (
+                <div className="bg-gradient-to-r from-purple-500/10 to-coral-500/10 border border-purple-500/30 rounded-xl p-4">
+                  <div className="text-center">
+                    <LogIn className="w-8 h-8 mx-auto mb-2 text-purple-400" />
+                    <p className="text-purple-200 text-sm mb-3">
+                      Sign up to keep chatting with Olivia and get personalized outfit recommendations!
+                    </p>
+                    <Button
+                      onClick={() => navigate('/auth')}
+                      className="bg-gradient-to-r from-purple-500 to-coral-400 hover:from-purple-600 hover:to-coral-500"
+                    >
+                      <LogIn className="w-4 h-4 mr-2" />
+                      Sign Up / Log In
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Rate Limit CTA (for authenticated users who hit backend limit) */}
+              {status === 'rate_limited' && isAuthenticated && (
                 <div className="bg-gradient-to-r from-amber-500/10 to-purple-500/10 border border-amber-500/30 rounded-xl p-4">
-                  {isAuthenticated ? (
-                    <div className="text-center">
-                      <Crown className="w-8 h-8 mx-auto mb-2 text-amber-400" />
-                      <p className="text-amber-200 text-sm mb-3">
-                        Daily chat limit reached. Upgrade to Premium for unlimited chats.
-                      </p>
-                      <Button
-                        onClick={() => navigate('/premium')}
-                        className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-semibold"
-                      >
-                        <Crown className="w-4 h-4 mr-2" />
-                        Upgrade to Premium
-                      </Button>
-                    </div>
-                  ) : (
-                    <div className="text-center">
-                      <LogIn className="w-8 h-8 mx-auto mb-2 text-purple-400" />
-                      <p className="text-purple-200 text-sm mb-3">
-                        Sign up to chat more with Olivia.
-                      </p>
-                      <Button
-                        onClick={() => navigate('/auth')}
-                        className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700"
-                      >
-                        <LogIn className="w-4 h-4 mr-2" />
-                        Sign Up / Log In
-                      </Button>
-                    </div>
-                  )}
+                  <div className="text-center">
+                    <Crown className="w-8 h-8 mx-auto mb-2 text-amber-400" />
+                    <p className="text-amber-200 text-sm mb-3">
+                      Daily chat limit reached. Upgrade to Premium for unlimited chats.
+                    </p>
+                    <Button
+                      onClick={() => navigate('/premium')}
+                      className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-semibold"
+                    >
+                      <Crown className="w-4 h-4 mr-2" />
+                      Upgrade to Premium
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -382,8 +499,8 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Ask Olivia anything..."
-                    disabled={isLoading || (limitReached && !isAuthenticated)}
+                    placeholder={isInputDisabled ? "Chat limit reached" : "Ask Olivia anything..."}
+                    disabled={isInputDisabled}
                     rows={1}
                     className={cn(
                       "w-full resize-none rounded-xl px-4 py-3 pr-12",
@@ -398,7 +515,7 @@ const OliviaChatPanel: React.FC<OliviaChatPanelProps> = ({
                 </div>
                 <Button
                   onClick={sendMessage}
-                  disabled={!inputValue.trim() || isLoading || (limitReached && !isAuthenticated)}
+                  disabled={!inputValue.trim() || isInputDisabled}
                   className="bg-gradient-to-r from-purple-500 to-coral-400 hover:from-purple-600 hover:to-coral-500 h-12 w-12 rounded-xl"
                 >
                   {isLoading ? (
