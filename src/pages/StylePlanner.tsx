@@ -8,19 +8,22 @@ import WeeklyOutfitPlanner from '@/components/style-planner/WeeklyOutfitPlanner'
 import { useOutfitContext } from '@/hooks/useOutfitContext';
 import { useLocationStorage } from '@/hooks/useLocationStorage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { BarChart3, CalendarIcon, CalendarDays, Clock, Users, Sparkles, Activity, PieChart } from 'lucide-react';
+import { BarChart3, CalendarIcon, CalendarDays, Clock, Users, Sparkles, Activity, PieChart, MessageCircle } from 'lucide-react';
 import { ChartContainer, ChartTooltipContent, ChartTooltip } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, CartesianGrid, Tooltip } from 'recharts';
 import { useIsMobile } from '@/hooks/use-mobile';
 import CollapsibleOliviaSection from '@/components/outfits/CollapsibleOliviaSection';
 import MissedOpportunitiesSection from '@/components/outfits/calendar/MissedOpportunitiesSection';
 import SmartRemindersPanel from '@/components/olivia/SmartRemindersPanel';
+import OliviaChatPanel from '@/components/olivia/OliviaChatPanel';
+import { Button } from '@/components/ui/button';
 
 const StylePlanner = () => {
   const { outfits, clothingItems, outfitLogs, addOutfitLog, loading } = useOutfitContext();
   const { savedLocation } = useLocationStorage();
   const [showTimeline, setShowTimeline] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [showOliviaChat, setShowOliviaChat] = useState(false);
   const isMobile = useIsMobile();
 
   const handleShowTimeline = () => {
@@ -32,7 +35,7 @@ const StylePlanner = () => {
   };
 
   const handleChatClick = () => {
-    console.log("Chat with Olivia clicked");
+    setShowOliviaChat(true);
   };
 
   return (
@@ -141,6 +144,13 @@ const StylePlanner = () => {
           />
         </motion.div>
       </section>
+
+      {/* Olivia Chat Panel */}
+      <OliviaChatPanel
+        isOpen={showOliviaChat}
+        onClose={() => setShowOliviaChat(false)}
+        wardrobeCount={clothingItems?.length || null}
+      />
     </div>
   );
 };
