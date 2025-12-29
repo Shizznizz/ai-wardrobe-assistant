@@ -3,10 +3,9 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { UserPreferences, Outfit, ClothingItem } from '@/lib/types';
 import { OutfitLog } from '@/components/outfits/OutfitLogItem';
 
-// Environment variables (read once at module load, but don't throw)
-// Support both VITE_SUPABASE_PUBLISHABLE_KEY (alias) and VITE_SUPABASE_ANON_KEY (canonical)
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+// Hardcoded Supabase configuration (per Supabase instructions - DO NOT use VITE_* variables)
+const SUPABASE_URL = "https://aaiyxtbovepseasghtth.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFhaXl4dGJvdmVwc2Vhc2dodHRoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDI0NzcxNDMsImV4cCI6MjA1ODA1MzE0M30.Pq66ZdBT_ZEBnPbXkDe-SVMnMvqoNjcuTo05GcPabL0";
 
 // Validation result
 export interface SupabaseConfigStatus {
@@ -20,19 +19,7 @@ export interface SupabaseConfigStatus {
  * Safe to call at any time - returns status instead of crashing
  */
 export function validateSupabaseConfig(): SupabaseConfigStatus {
-  const missing: string[] = [];
-
-  if (!supabaseUrl) missing.push('VITE_SUPABASE_URL');
-  if (!supabaseAnonKey) missing.push('VITE_SUPABASE_ANON_KEY');
-
-  if (missing.length > 0) {
-    return {
-      isValid: false,
-      missingVars: missing,
-      errorMessage: `Missing required environment variables: ${missing.join(', ')}. Please ensure these are set in your .env file. See .env.example for reference.`
-    };
-  }
-
+  // Configuration is now hardcoded, so always valid
   return {
     isValid: true,
     missingVars: [],
@@ -52,15 +39,8 @@ export function getSupabaseClient(): SupabaseClient | null {
   // Return cached client if available
   if (supabaseClient) return supabaseClient;
 
-  // Validate configuration
-  const config = validateSupabaseConfig();
-  if (!config.isValid) {
-    console.error('[Supabase Config Error]', config.errorMessage);
-    return null;
-  }
-
-  // Create and cache client
-  supabaseClient = createClient(supabaseUrl!, supabaseAnonKey!, {
+  // Create and cache client with hardcoded values
+  supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
