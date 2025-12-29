@@ -1,7 +1,7 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, ImageOff } from 'lucide-react';
 import { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from "@/components/ui/carousel";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -56,19 +56,23 @@ const TestimonialsSection = () => {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ delay: 0.2, duration: 0.7 }}
+      aria-labelledby="testimonials-heading"
     >
       <div className="container mx-auto max-w-6xl">
-        <div className="mb-12 text-center flex flex-col items-center justify-center">
+        <header className="mb-12 text-center flex flex-col items-center justify-center">
           <div className="flex items-center gap-2 mb-3">
-            <Sparkles className="h-6 w-6 text-coral-400" />
-            <h2 className="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-coral-400 to-purple-400">
+            <Sparkles className="h-6 w-6 text-coral-400" aria-hidden="true" />
+            <h2 
+              id="testimonials-heading"
+              className="text-3xl md:text-4xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-coral-400 to-purple-400"
+            >
               What Fashion Lovers Say
             </h2>
           </div>
           <p className="text-center text-white/70 mb-12 max-w-2xl mx-auto">
             Join thousands of women who have transformed their style experience with Olivia's AI fashion assistance.
           </p>
-        </div>
+        </header>
         
         <Carousel
           opts={{
@@ -95,28 +99,48 @@ const TestimonialsSection = () => {
         </Carousel>
         
         {/* Olivia comment */}
-        <motion.div 
-          className="mt-12 flex justify-end max-w-xs ml-auto"
-          initial={{ opacity: 0, scale: 0.9 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.8, duration: 0.5 }}
-        >
-          <div className="relative">
-            <div className="absolute -right-2 -top-10 bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/10 speech-bubble-right">
-              <p className="text-sm text-white/90 italic">Love hearing this! 💜</p>
-            </div>
-            <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-coral-500/30">
-              <img 
-                src="/lovable-uploads/5be0da00-2b86-420e-b2b4-3cc8e5e4dc1a.png" 
-                alt="Olivia" 
-                className="w-full h-full object-cover"
-              />
-            </div>
-          </div>
-        </motion.div>
+        <OliviaComment />
       </div>
     </motion.section>
+  );
+};
+
+// Olivia avatar with image fallback
+const OliviaComment = () => {
+  const [imageError, setImageError] = useState(false);
+  
+  return (
+    <motion.div 
+      className="mt-12 flex justify-end max-w-xs ml-auto"
+      initial={{ opacity: 0, scale: 0.9 }}
+      whileInView={{ opacity: 1, scale: 1 }}
+      viewport={{ once: true }}
+      transition={{ delay: 0.8, duration: 0.5 }}
+    >
+      <div className="relative">
+        <div className="absolute -right-2 -top-10 bg-white/10 backdrop-blur-sm rounded-lg p-3 border border-white/10 speech-bubble-right">
+          <p className="text-sm text-white/90 italic">Love hearing this! 💜</p>
+        </div>
+        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-coral-500/30">
+          {imageError ? (
+            <div 
+              className="w-full h-full flex items-center justify-center bg-gradient-to-r from-coral-500/20 to-purple-500/20"
+              role="img"
+              aria-label="Olivia"
+            >
+              <span className="text-white font-bold text-lg">O</span>
+            </div>
+          ) : (
+            <img 
+              src="/lovable-uploads/5be0da00-2b86-420e-b2b4-3cc8e5e4dc1a.png" 
+              alt="Olivia"
+              className="w-full h-full object-cover"
+              onError={() => setImageError(true)}
+            />
+          )}
+        </div>
+      </div>
+    </motion.div>
   );
 };
 
