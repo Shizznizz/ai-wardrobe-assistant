@@ -5,9 +5,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useAuth } from '@/hooks/useAuth';
 import { adminService } from '@/services/AdminService';
-import { TrendingUp, Database, Download, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { TrendingUp, Database, Download, ChevronDown, ChevronUp, AlertTriangle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import UserStatsSection from '@/components/admin/UserStatsSection';
 import QuizAnalyticsSection from '@/components/admin/QuizAnalyticsSection';
 import OutfitStatsSection from '@/components/admin/OutfitStatsSection';
@@ -16,24 +16,59 @@ const AdminDashboard = () => {
   const { user, isAuthenticated } = useAuth();
   const [adminToolsOpen, setAdminToolsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [isCheckingAdmin, setIsCheckingAdmin] = useState(true);
 
-  // Check if user is admin
-  const isAdmin = isAuthenticated && user?.email === 'danieldeurloo@hotmail.com';
+  // Check admin status server-side on mount
+  useEffect(() => {
+    const checkAdmin = async () => {
+      if (!isAuthenticated) {
+        setIsAdmin(false);
+        setIsCheckingAdmin(false);
+        return;
+      }
+
+      try {
+        // Server-side admin check via user_roles table
+        const adminStatus = await adminService.checkAdminStatus();
+        setIsAdmin(adminStatus);
+      } catch (error) {
+        console.error('Error checking admin status:', error);
+        setIsAdmin(false);
+      } finally {
+        setIsCheckingAdmin(false);
+      }
+    };
+
+    checkAdmin();
+  }, [isAuthenticated]);
 
   const handleExportData = async () => {
     setIsExporting(true);
     try {
       await adminService.exportAllUserData();
-      toast.success('User data exported successfully');
+      toast.success('Analytics data exported successfully');
     } catch (error) {
       console.error('Error exporting data:', error);
-      toast.error('Failed to export user data');
+      toast.error('Failed to export data. Admin access required.');
     } finally {
       setIsExporting(false);
     }
   };
 
-  // Show unauthorized message if not admin
+  // Show loading while checking admin status
+  if (isCheckingAdmin) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-slate-950 to-purple-950 flex items-center justify-center">
+        <div className="text-center">
+          <Loader2 className="h-12 w-12 text-purple-400 animate-spin mx-auto mb-4" />
+          <p className="text-white/70">Verifying access...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show unauthorized message if not admin (based on server-side check)
   if (!isAuthenticated || !isAdmin) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-950 to-purple-950 flex items-center justify-center">
@@ -105,12 +140,12 @@ const AdminDashboard = () => {
                       className="bg-blue-600 hover:bg-blue-700 text-white"
                     >
                       <Download className="h-4 w-4 mr-2" />
-                      {isExporting ? 'Exporting...' : 'Export All User Data (CSV)'}
+                      {isExporting ? 'Exporting...' : 'Export Analytics (JSON)'}
                     </Button>
                   </div>
                   
                   <div className="text-sm text-white/60 bg-red-900/20 p-3 rounded-lg border border-red-500/30">
-                    <strong className="text-red-400">Admin Zone:</strong> These tools provide access to all user data. Use responsibly and in compliance with privacy policies.
+                    <strong className="text-red-400">Admin Zone:</strong> Access is validated server-side using the user_roles table. Only aggregated analytics data is exported.
                   </div>
                 </CardContent>
               </CollapsibleContent>

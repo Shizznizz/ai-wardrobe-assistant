@@ -9,7 +9,6 @@ export interface AdminAnalytics {
   quiz_breakdown: Record<string, number>;
   recent_signups: Array<{
     first_name: string;
-    last_name: string;
     created_at: string;
   }>;
   popular_tags: Array<{
@@ -22,7 +21,6 @@ export interface UserStats {
   total_users: number;
   recent_signups: Array<{
     first_name: string;
-    last_name: string;
     created_at: string;
   }>;
 }
@@ -41,14 +39,30 @@ export interface OutfitSummary {
 }
 
 class AdminService {
+  /**
+   * Check if the current user has admin role using server-side validation.
+   * NEVER use client-side email comparison for authorization.
+   */
   async checkAdminStatus(): Promise<boolean> {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) return false;
       
-      // Check if user email is the admin email
-      return user.email === 'danieldeurloo@hotmail.com';
+      // Query the user_roles table to check admin status (server-side validation)
+      const { data: roleData, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error checking admin role:', error);
+        return false;
+      }
+      
+      return roleData !== null;
     } catch (error) {
       console.error('Exception checking admin status:', error);
       return false;
@@ -57,6 +71,7 @@ class AdminService {
 
   async getAnalytics(): Promise<AdminAnalytics | null> {
     try {
+      // The RPC function itself validates admin status server-side
       const { data, error } = await supabase.rpc('get_admin_analytics');
       
       if (error) {
@@ -128,55 +143,55 @@ class AdminService {
     }
   }
 
+  /**
+   * Export user data - requires admin role (validated server-side via RPC)
+   * Only exports aggregated/anonymized data for privacy
+   */
   async exportAllUserData(): Promise<void> {
     try {
-      // Fetch all user data
-      const [profilesRes, outfitsRes, quizResultsRes] = await Promise.all([
-        supabase.from('profiles').select('*'),
-        supabase.from('outfits').select('*'),
-        supabase.from('quiz_results').select('*')
-      ]);
-
-      if (profilesRes.error || outfitsRes.error || quizResultsRes.error) {
-        throw new Error('Failed to fetch user data for export');
+      // Verify admin status first via server-side check
+      const isAdmin = await this.checkAdminStatus();
+      if (!isAdmin) {
+        throw new Error('Unauthorized: Admin access required');
       }
 
-      // Create CSV content
-      const createCSV = (data: any[], filename: string) => {
-        if (data.length === 0) return;
-        
-        const headers = Object.keys(data[0]);
-        const csvContent = [
-          headers.join(','),
-          ...data.map(row => 
-            headers.map(header => {
-              const value = row[header];
-              if (typeof value === 'string') {
-                return `"${value.replace(/"/g, '""')}"`;
-              }
-              return value || '';
-            }).join(',')
-          )
-        ].join('\n');
+      // Get analytics data (already validated server-side)
+      const analytics = await this.getAnalytics();
+      if (!analytics) {
+        throw new Error('Failed to fetch analytics data');
+      }
 
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        const url = URL.createObjectURL(blob);
-        link.setAttribute('href', url);
-        link.setAttribute('download', `${filename}_${new Date().toISOString().split('T')[0]}.csv`);
-        link.style.visibility = 'hidden';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+      // Export only aggregated analytics data, not raw user data
+      const exportData = {
+        exportedAt: new Date().toISOString(),
+        summary: {
+          totalUsers: analytics.total_users,
+          activeUsers: analytics.active_users,
+          totalQuizzes: analytics.total_quizzes,
+          totalOutfits: analytics.total_outfits
+        },
+        quizBreakdown: analytics.quiz_breakdown,
+        popularTags: analytics.popular_tags,
+        recentSignups: analytics.recent_signups.map(s => ({
+          firstName: s.first_name,
+          signupDate: s.created_at
+        }))
       };
 
-      // Export each dataset
-      createCSV(profilesRes.data, 'user_profiles');
-      createCSV(outfitsRes.data, 'user_outfits');
-      createCSV(quizResultsRes.data, 'quiz_results');
+      // Create JSON export (not raw CSV of all data)
+      const jsonContent = JSON.stringify(exportData, null, 2);
+      const blob = new Blob([jsonContent], { type: 'application/json;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `admin_analytics_${new Date().toISOString().split('T')[0]}.json`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
 
     } catch (error) {
-      console.error('Error exporting user data:', error);
+      console.error('Error exporting data:', error);
       throw error;
     }
   }

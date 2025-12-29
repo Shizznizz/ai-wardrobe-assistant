@@ -7,6 +7,44 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Input validation helpers
+function validateRequiredString(value: unknown, fieldName: string, maxLength = 100): string {
+  if (typeof value !== 'string') {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error(`${fieldName} cannot be empty`);
+  }
+  if (trimmed.length > maxLength) {
+    throw new Error(`${fieldName} must be less than ${maxLength} characters`);
+  }
+  return trimmed;
+}
+
+function validateOptionalString(value: unknown, fieldName: string, maxLength = 100): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > maxLength) {
+    throw new Error(`${fieldName} must be less than ${maxLength} characters`);
+  }
+  return trimmed || undefined;
+}
+
+function validateOptionalUUID(value: unknown, fieldName: string): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw new Error(`${fieldName} must be a valid UUID`);
+  }
+  return value;
+}
+
 // Observability helper - structured logging (no PII)
 function logEvent(event: string, data: Record<string, any>) {
   console.log(JSON.stringify({
@@ -62,7 +100,15 @@ serve(async (req) => {
     }
 
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { styleVibe, occasion, weather, colorFamily, comfortLevel, userId }: InstantOutfitRequest = await req.json();
+    const body = await req.json();
+    
+    // Validate all inputs
+    const styleVibe = validateRequiredString(body.styleVibe, 'styleVibe', 50);
+    const occasion = validateRequiredString(body.occasion, 'occasion', 100);
+    const weather = validateRequiredString(body.weather, 'weather', 50);
+    const colorFamily = validateOptionalString(body.colorFamily, 'colorFamily', 50);
+    const comfortLevel = validateOptionalString(body.comfortLevel, 'comfortLevel', 30);
+    const userId = validateOptionalUUID(body.userId, 'userId');
 
     let userType = userId ? 'free' : 'logged_out';
     let isPremium = false;
@@ -278,6 +324,7 @@ Make them diverse - vary the silhouettes, textures, and key pieces.${colorFamily
     });
 
     console.error('Error generating instant outfits:', error);
+    const status = error.message?.includes('must be') || error.message?.includes('cannot be') ? 400 : 500;
     return new Response(
       JSON.stringify({
         error: error.message || 'Failed to generate outfits',
@@ -285,7 +332,7 @@ Make them diverse - vary the silhouettes, textures, and key pieces.${colorFamily
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
+        status
       }
     );
   }

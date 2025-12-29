@@ -6,6 +6,48 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Input validation helpers
+function validateBase64Image(value: unknown): string {
+  if (typeof value !== 'string') {
+    throw new Error('imageBase64 must be a string');
+  }
+  
+  // Check max size (10MB base64 encoded ~= 13.3MB string)
+  const MAX_SIZE = 15 * 1024 * 1024; // 15MB string limit
+  if (value.length > MAX_SIZE) {
+    throw new Error('Image is too large. Maximum size is 10MB.');
+  }
+  
+  // Validate base64 format
+  if (value.startsWith('data:')) {
+    const mimeMatch = value.match(/data:([^;]+);base64,(.*)/)
+    if (!mimeMatch) {
+      throw new Error('Invalid base64 data URL format');
+    }
+    const mimeType = mimeMatch[1];
+    const base64Data = mimeMatch[2];
+    
+    // Validate MIME type
+    if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(mimeType)) {
+      throw new Error(`Unsupported image format: ${mimeType}. Supported: JPEG, PNG, WebP`);
+    }
+    
+    // Validate base64 content
+    if (!/^[A-Za-z0-9+/=]+$/.test(base64Data)) {
+      throw new Error('Invalid base64 encoding');
+    }
+    
+    return value;
+  }
+  
+  // Plain base64 without data URL prefix
+  if (!/^[A-Za-z0-9+/=]+$/.test(value)) {
+    throw new Error('Invalid base64 encoding');
+  }
+  
+  return value;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -25,20 +67,12 @@ serve(async (req) => {
       )
     }
 
-    const { imageBase64 } = await req.json()
+    const body = await req.json()
     
-    if (!imageBase64) {
-      console.error('❌ No imageBase64 provided in request')
-      return new Response(
-        JSON.stringify({ error: "Missing imageBase64" }), 
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
-    }
-
-    console.log('🎯 Processing background removal for base64 image, size:', imageBase64.length)
+    // Validate input
+    const imageBase64 = validateBase64Image(body.imageBase64);
+    
+    console.log('🎯 Processing background removal for validated base64 image, size:', imageBase64.length)
 
     // Extract MIME type from base64 data URL
     let mimeType = 'image/png' // default
@@ -51,18 +85,6 @@ serve(async (req) => {
         base64Data = mimeMatch[2]
         console.log('📋 Detected MIME type:', mimeType)
       }
-    }
-
-    // Validate supported formats
-    if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(mimeType)) {
-      console.error('❌ Unsupported image format:', mimeType)
-      return new Response(
-        JSON.stringify({ error: `Unsupported image format: ${mimeType}` }), 
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
-      )
     }
 
     // Convert base64 to binary for Hugging Face API
@@ -145,13 +167,14 @@ serve(async (req) => {
 
   } catch (err) {
     console.error('💥 Error in remove-background function:', err)
+    const status = err.message?.includes('must be') || err.message?.includes('too large') || err.message?.includes('Unsupported') ? 400 : 500;
     return new Response(
       JSON.stringify({ 
-        error: `Server error: ${err.message}`,
+        error: err.message || 'Server error',
         details: err.stack 
       }), 
       { 
-        status: 500,
+        status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     )
