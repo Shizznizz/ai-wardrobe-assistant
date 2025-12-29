@@ -20,6 +20,8 @@ interface InstantOutfitRequest {
   styleVibe: string;
   occasion: string;
   weather: string;
+  colorFamily?: string;
+  comfortLevel?: string;
   userId?: string;
 }
 
@@ -60,7 +62,7 @@ serve(async (req) => {
     }
 
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { styleVibe, occasion, weather, userId }: InstantOutfitRequest = await req.json();
+    const { styleVibe, occasion, weather, colorFamily, comfortLevel, userId }: InstantOutfitRequest = await req.json();
 
     let userType = userId ? 'free' : 'logged_out';
     let isPremium = false;
@@ -140,7 +142,9 @@ serve(async (req) => {
       user_type: userType,
       style_vibe: styleVibe,
       occasion,
-      weather
+      weather,
+      color_family: colorFamily || 'any',
+      comfort_level: comfortLevel || 'any'
     });
 
     // Build the prompt for OpenAI
@@ -171,9 +175,9 @@ Return ONLY valid JSON with this exact structure:
 
 Style: ${styleVibe}
 Occasion: ${occasion}
-Weather: ${weather}
+Weather: ${weather}${colorFamily ? `\nColor Family: ${colorFamily}` : ''}${comfortLevel ? `\nComfort Level: ${comfortLevel}` : ''}
 
-Make them diverse - vary the silhouettes, textures, and key pieces.`;
+Make them diverse - vary the silhouettes, textures, and key pieces.${colorFamily ? ` Focus on ${colorFamily.toLowerCase()} color palette.` : ''}${comfortLevel ? ` Ensure the fit is ${comfortLevel.toLowerCase()} (${comfortLevel === 'Relaxed' ? 'loose, comfortable, breathable' : comfortLevel === 'Balanced' ? 'moderately fitted, comfortable yet polished' : 'form-fitting, structured, tailored'}).` : ''}`;
 
     const openaiStartTime = Date.now();
     const response = await fetch('https://api.openai.com/v1/chat/completions', {

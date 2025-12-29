@@ -15,6 +15,8 @@ export interface InstantOutfit {
 export type StyleVibe = 'Minimalist' | 'Boho Chic' | 'Sporty' | 'Edgy' | 'Classic' | 'Romantic';
 export type Occasion = 'Work' | 'Casual' | 'Date Night' | 'Weekend';
 export type WeatherCondition = 'Sunny' | 'Rainy' | 'Cold' | 'Hot';
+export type ColorFamily = 'Neutrals' | 'Warm' | 'Cool' | 'Bold';
+export type ComfortLevel = 'Relaxed' | 'Balanced' | 'Snatched';
 
 interface GenerationResult {
   outfits: InstantOutfit[];
@@ -359,13 +361,15 @@ export async function generateInstantOutfits(
   occasion: Occasion,
   weather: WeatherInfo | null,
   manualWeather?: WeatherCondition,
+  colorFamily?: ColorFamily,
+  comfortLevel?: ComfortLevel,
   userId?: string
 ): Promise<GenerationResult> {
   const weatherCondition = manualWeather || determineWeatherCondition(weather);
   const startTime = Date.now();
 
   // Log generation start (no PII)
-  console.log(`[InstantOutfit] Generation started: ${styleVibe} / ${occasion} / ${weatherCondition} | user=${userId ? 'authenticated' : 'logged_out'}`);
+  console.log(`[InstantOutfit] Generation started: ${styleVibe} / ${occasion} / ${weatherCondition} / ${colorFamily || 'any'} / ${comfortLevel || 'any'} | user=${userId ? 'authenticated' : 'logged_out'}`);
 
   // Rate limiting for logged-out users
   if (!userId) {
@@ -388,6 +392,8 @@ export async function generateInstantOutfits(
         styleVibe,
         occasion,
         weather: weatherCondition,
+        colorFamily,
+        comfortLevel,
         userId
       }
     });

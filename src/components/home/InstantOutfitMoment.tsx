@@ -11,7 +11,9 @@ import {
   InstantOutfit,
   StyleVibe,
   Occasion,
-  WeatherCondition
+  WeatherCondition,
+  ColorFamily,
+  ComfortLevel
 } from '@/services/InstantOutfitService';
 import { fetchWeatherData, getIconName } from '@/services/WeatherService';
 import { WeatherInfo } from '@/lib/types';
@@ -24,6 +26,8 @@ interface InstantOutfitMomentProps {
 const STYLE_VIBES: StyleVibe[] = ['Minimalist', 'Boho Chic', 'Sporty', 'Edgy', 'Classic', 'Romantic'];
 const OCCASIONS: Occasion[] = ['Work', 'Casual', 'Date Night', 'Weekend'];
 const WEATHER_CONDITIONS: WeatherCondition[] = ['Sunny', 'Rainy', 'Cold', 'Hot'];
+const COLOR_FAMILIES: ColorFamily[] = ['Neutrals', 'Warm', 'Cool', 'Bold'];
+const COMFORT_LEVELS: ComfortLevel[] = ['Relaxed', 'Balanced', 'Snatched'];
 
 const weatherIcons: Record<WeatherCondition, any> = {
   Sunny: Sun,
@@ -40,6 +44,8 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
   const [selectedOccasion, setSelectedOccasion] = useState<Occasion>('Casual');
   const [autoWeather, setAutoWeather] = useState<WeatherInfo | null>(null);
   const [manualWeather, setManualWeather] = useState<WeatherCondition | null>(null);
+  const [selectedColorFamily, setSelectedColorFamily] = useState<ColorFamily | null>(null);
+  const [selectedComfortLevel, setSelectedComfortLevel] = useState<ComfortLevel | null>(null);
   const [loadingWeather, setLoadingWeather] = useState(true);
   const [generatedOutfits, setGeneratedOutfits] = useState<InstantOutfit[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -116,6 +122,8 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
         selectedOccasion,
         autoWeather,
         manualWeather || undefined,
+        selectedColorFamily || undefined,
+        selectedComfortLevel || undefined,
         user?.id
       );
 
@@ -345,6 +353,54 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
                   </button>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Color Family Selector */}
+          <div>
+            <label className="block text-sm font-medium text-white/90 mb-3">
+              Color Family
+              <span className="text-xs text-white/60 ml-2">(optional)</span>
+            </label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+              {COLOR_FAMILIES.map(colorFamily => (
+                <button
+                  key={colorFamily}
+                  onClick={() => setSelectedColorFamily(selectedColorFamily === colorFamily ? null : colorFamily)}
+                  className={cn(
+                    'px-4 py-3 rounded-lg border-2 transition-all duration-200 text-sm font-medium',
+                    selectedColorFamily === colorFamily
+                      ? 'border-coral-400 bg-coral-400/20 text-coral-300'
+                      : 'border-white/20 bg-white/5 text-white/70 hover:border-white/40 hover:bg-white/10'
+                  )}
+                >
+                  {colorFamily}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Comfort Level Selector */}
+          <div>
+            <label className="block text-sm font-medium text-white/90 mb-3">
+              Comfort Level
+              <span className="text-xs text-white/60 ml-2">(optional)</span>
+            </label>
+            <div className="grid grid-cols-3 gap-3">
+              {COMFORT_LEVELS.map(comfortLevel => (
+                <button
+                  key={comfortLevel}
+                  onClick={() => setSelectedComfortLevel(selectedComfortLevel === comfortLevel ? null : comfortLevel)}
+                  className={cn(
+                    'px-4 py-3 rounded-lg border-2 transition-all duration-200 text-sm font-medium',
+                    selectedComfortLevel === comfortLevel
+                      ? 'border-coral-400 bg-coral-400/20 text-coral-300'
+                      : 'border-white/20 bg-white/5 text-white/70 hover:border-white/40 hover:bg-white/10'
+                  )}
+                >
+                  {comfortLevel}
+                </button>
+              ))}
             </div>
           </div>
         </div>
