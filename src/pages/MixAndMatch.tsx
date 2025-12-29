@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { Outfit } from '@/lib/types';
@@ -14,30 +14,83 @@ import { useAuth } from '@/hooks/useAuth';
 import { useWardrobeData } from '@/hooks/useWardrobeData';
 import EnhancedHeroSection from '@/components/shared/EnhancedHeroSection';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, RefreshCw } from 'lucide-react';
+import { AlertCircle, RefreshCw, CheckCircle2, WifiOff } from 'lucide-react';
 import MixMatchActions from '@/components/outfits/mix-match/MixMatchActions';
 import { Button } from '@/components/ui/button';
 import { getSupabaseClient } from '@/integrations/supabase/client';
+
+// localStorage keys for persistence
+const WEATHER_STORAGE_KEY = 'olivia_weather_preferences';
+
+interface SavedWeatherPrefs {
+  temperature: number;
+  weatherCondition: string;
+  situation: string;
+  savedAt: string;
+}
+
+function loadWeatherPreferences(): Partial<SavedWeatherPrefs> {
+  try {
+    const stored = localStorage.getItem(WEATHER_STORAGE_KEY);
+    if (stored) {
+      const prefs = JSON.parse(stored) as SavedWeatherPrefs;
+      // Only use if saved within last 24 hours
+      const savedAt = new Date(prefs.savedAt);
+      const now = new Date();
+      const hoursDiff = (now.getTime() - savedAt.getTime()) / (1000 * 60 * 60);
+      if (hoursDiff < 24) {
+        return prefs;
+      }
+    }
+  } catch (e) {
+    console.warn('[MixAndMatch] Failed to load weather preferences:', e);
+  }
+  return {};
+}
+
+function saveWeatherPreferences(prefs: Omit<SavedWeatherPrefs, 'savedAt'>) {
+  try {
+    localStorage.setItem(WEATHER_STORAGE_KEY, JSON.stringify({
+      ...prefs,
+      savedAt: new Date().toISOString()
+    }));
+  } catch (e) {
+    console.warn('[MixAndMatch] Failed to save weather preferences:', e);
+  }
+}
 
 const MixAndMatch = () => {
   const { isAuthenticated, user } = useAuth();
   const { clothingItems, outfits, isLoadingItems, isLoadingOutfits, refreshOutfits } = useWardrobeData();
   
+  // Load persisted weather preferences
+  const savedPrefs = loadWeatherPreferences();
+  
   const [currentOutfit, setCurrentOutfit] = useState<Outfit | null>(null);
   const [showRecommendation, setShowRecommendation] = useState(false);
-  const [temperature, setTemperature] = useState(72);
-  const [weatherCondition, setWeatherCondition] = useState('clear');
-  const [situation, setSituation] = useState('casual');
+  const [temperature, setTemperature] = useState(savedPrefs.temperature ?? 72);
+  const [weatherCondition, setWeatherCondition] = useState(savedPrefs.weatherCondition ?? 'clear');
+  const [situation, setSituation] = useState(savedPrefs.situation ?? 'casual');
   const [isCreateOutfitDialogOpen, setIsCreateOutfitDialogOpen] = useState(false);
+  const [savedToday, setSavedToday] = useState<string[]>([]);
+  const [supabaseAvailable, setSupabaseAvailable] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  // Check Supabase availability on mount
+  useEffect(() => {
+    const client = getSupabaseClient();
+    setSupabaseAvailable(!!client);
+  }, []);
+  
+  // Persist weather preferences when they change
+  useEffect(() => {
+    saveWeatherPreferences({ temperature, weatherCondition, situation });
+  }, [temperature, weatherCondition, situation]);
   
   // Scroll to top on page load
   useEffect(() => {
-    // Only scroll to top if not coming from a specific anchor
     if (!window.location.hash) {
-      window.scrollTo({
-        top: 0,
-        behavior: 'smooth'
-      });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, []);
 
@@ -50,7 +103,6 @@ const MixAndMatch = () => {
     setShowRecommendation(true);
     toast.success("Generating outfit recommendations...");
     
-    // Scroll to recommendation section
     setTimeout(() => {
       const recommendationSection = document.getElementById('olivia-recommendation');
       if (recommendationSection) {
@@ -59,29 +111,33 @@ const MixAndMatch = () => {
     }, 500);
   };
 
-  // Handle weather section updates
-  const handleWeatherUpdate = (weatherInfo: any) => {
+  const handleWeatherUpdate = useCallback((weatherInfo: any) => {
     if (weatherInfo.temperature) {
       setTemperature(weatherInfo.temperature);
     }
     if (weatherInfo.condition) {
       setWeatherCondition(weatherInfo.condition.toLowerCase());
     }
-  };
+  }, []);
 
-  const handleSituationChange = (newSituation: string) => {
+  const handleSituationChange = useCallback((newSituation: string) => {
     setSituation(newSituation);
-  };
+  }, []);
 
   const handleSaveOutfit = async (outfit: Outfit) => {
+    if (isSaving) return;
+    
+    setIsSaving(true);
+    
     try {
-      // Save to Supabase if authenticated
       if (user) {
-        // Get Supabase client safely
         const supabase = getSupabaseClient();
         if (!supabase) {
-          console.warn('[MixAndMatch] Supabase client not available - cannot save outfit');
-          toast.error("Unable to save outfit. Database service is currently unavailable.");
+          setSupabaseAvailable(false);
+          toast.error("Unable to save outfit", {
+            description: "Database service is currently unavailable. Your outfit was not saved.",
+            duration: 5000
+          });
           return;
         }
 
@@ -102,9 +158,26 @@ const MixAndMatch = () => {
 
         if (error) {
           console.error('[MixAndMatch] Error saving outfit to database:', error);
-          toast.error("Failed to save outfit to database. Please try again.");
+          
+          // Provide specific error messages based on error type
+          let errorMessage = "Failed to save outfit to your collection.";
+          if (error.code === '23505') {
+            errorMessage = "This outfit already exists in your collection.";
+          } else if (error.code === '42501') {
+            errorMessage = "Permission denied. Please try logging in again.";
+          } else if (error.message?.includes('network')) {
+            errorMessage = "Network error. Please check your connection and try again.";
+          }
+          
+          toast.error("Save failed", {
+            description: errorMessage,
+            duration: 5000
+          });
           return;
         }
+        
+        // Mark as saved today
+        setSavedToday(prev => [...prev, outfit.id]);
       }
 
       // Refresh outfits data
@@ -112,7 +185,10 @@ const MixAndMatch = () => {
         await refreshOutfits();
       }
 
-      toast.success("New outfit created!");
+      toast.success("Outfit saved!", {
+        description: `"${outfit.name}" has been added to your collection.`,
+        duration: 3000
+      });
 
       // Scroll to outfits section
       const outfitsSection = document.getElementById('saved-outfits-section');
@@ -121,13 +197,17 @@ const MixAndMatch = () => {
           outfitsSection.scrollIntoView({ behavior: 'smooth' });
         }, 300);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('[MixAndMatch] Error saving outfit:', error);
-      toast.error("Failed to save outfit. Please try again.");
+      toast.error("Something went wrong", {
+        description: error?.message || "Failed to save outfit. Please try again.",
+        duration: 5000
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
   
-  // Function to scroll to outfits section
   const scrollToOutfits = () => {
     const outfitsSection = document.querySelector('#saved-outfits-section');
     if (outfitsSection) {
@@ -135,12 +215,10 @@ const MixAndMatch = () => {
     }
   };
 
-  // Function to generate a new Olivia recommendation
   const handleSuggestAnotherOutfit = () => {
     setShowRecommendation(true);
     toast.info('Creating a new outfit suggestion for you...');
     
-    // Scroll to recommendation section or create it if it doesn't exist yet
     setTimeout(() => {
       if (!showRecommendation) {
         setShowRecommendation(true);
@@ -153,7 +231,6 @@ const MixAndMatch = () => {
     }, 300);
   };
   
-  // Show empty state if no items
   const renderEmptyWardrobeNotice = () => {
     if (!isLoadingItems && clothingItems.length === 0) {
       return (
@@ -168,9 +245,43 @@ const MixAndMatch = () => {
     }
     return null;
   };
+
+  const renderServiceUnavailableNotice = () => {
+    if (!supabaseAvailable) {
+      return (
+        <Alert className="mb-6 bg-orange-900/20 border-orange-500/50">
+          <WifiOff className="h-4 w-4 text-orange-400" />
+          <AlertTitle className="text-orange-300">Limited Functionality</AlertTitle>
+          <AlertDescription className="text-orange-200/80">
+            Some features are temporarily unavailable. You can still browse outfits, but saving won't work until the connection is restored.
+          </AlertDescription>
+        </Alert>
+      );
+    }
+    return null;
+  };
+
+  const renderSavedTodayBadge = () => {
+    if (savedToday.length === 0) return null;
+    
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: -10 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="fixed top-20 right-4 z-50 bg-green-600/90 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2"
+      >
+        <CheckCircle2 className="h-4 w-4" />
+        <span className="text-sm font-medium">
+          {savedToday.length} outfit{savedToday.length > 1 ? 's' : ''} saved today
+        </span>
+      </motion.div>
+    );
+  };
   
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 to-purple-950 text-white">
+      {renderSavedTodayBadge()}
+      
       <EnhancedHeroSection
         title="Your Daily Style, Curated by Olivia"
         subtitle="Olivia creates outfits that reflect your vibe, wardrobe, and even the weather."
@@ -192,6 +303,7 @@ const MixAndMatch = () => {
       />
       
       <div className="container mx-auto px-4 space-y-10 pt-6 pb-20">
+        {renderServiceUnavailableNotice()}
         {renderEmptyWardrobeNotice()}
         
         <EnhancedWeatherSection 
@@ -204,49 +316,49 @@ const MixAndMatch = () => {
         />
         
         <DailyOutfitSection
-              clothingItems={clothingItems} 
-              currentOutfit={currentOutfit}
-              isLoading={isLoadingItems} 
-            />
+          clothingItems={clothingItems} 
+          currentOutfit={currentOutfit}
+          isLoading={isLoadingItems} 
+        />
             
-            <div id="saved-outfits-section">
-              <SuggestedOutfitsSection 
-                clothingItems={clothingItems} 
-                outfits={outfits}
-                weather={{
-                  temperature,
-                  condition: weatherCondition
-                }}
-                isLoading={isLoadingOutfits}
-              />
-              
-              {outfits && outfits.length > 0 && (
-                <div className="flex justify-center mt-6">
-                  <Button 
-                    onClick={handleSuggestAnotherOutfit}
-                    variant="outline"
-                    className="border-purple-500/30 text-white hover:bg-purple-800/20"
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Suggest Another Outfit
-                  </Button>
-                </div>
-              )}
+        <div id="saved-outfits-section">
+          <SuggestedOutfitsSection 
+            clothingItems={clothingItems} 
+            outfits={outfits}
+            weather={{
+              temperature,
+              condition: weatherCondition
+            }}
+            isLoading={isLoadingOutfits}
+          />
+          
+          {outfits && outfits.length > 0 && (
+            <div className="flex justify-center mt-6">
+              <Button 
+                onClick={handleSuggestAnotherOutfit}
+                variant="outline"
+                className="border-purple-500/30 text-white hover:bg-purple-800/20"
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Suggest Another Outfit
+              </Button>
             </div>
+          )}
+        </div>
             
-            {showRecommendation && (
-              <div id="olivia-recommendation">
-                <OliviaRecommendationSection 
-                  weather={{
-                    temperature,
-                    condition: weatherCondition
-                  }}
-                  situation={situation}
-                  clothingItems={clothingItems}
-                  enableShuffle={true}
-                />
-              </div>
-            )}
+        {showRecommendation && (
+          <div id="olivia-recommendation">
+            <OliviaRecommendationSection 
+              weather={{
+                temperature,
+                condition: weatherCondition
+              }}
+              situation={situation}
+              clothingItems={clothingItems}
+              enableShuffle={true}
+            />
+          </div>
+        )}
             
         <CreateOutfitSection 
           clothingItems={clothingItems}
@@ -255,10 +367,8 @@ const MixAndMatch = () => {
         />
       </div>
       
-      {/* New Magic Section - replaces the ConfidenceSection */}
       <OutfitMagicSection />
       
-      {/* Create Outfit Dialog */}
       <CreateOutfitDialog
         open={isCreateOutfitDialogOpen}
         onOpenChange={setIsCreateOutfitDialogOpen}
