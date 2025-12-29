@@ -77,7 +77,7 @@ npx tsc --noEmit
 **Required** (all prefixed with `VITE_`):
 
 - `VITE_SUPABASE_URL` — Supabase project URL
-- `VITE_SUPABASE_PUBLISHABLE_KEY` — Supabase anon/public key
+- `VITE_SUPABASE_ANON_KEY` — Supabase anon/public key
 - `VITE_SUPABASE_PROJECT_ID` — Supabase project ID
 
 **Never commit `.env` to version control.**
