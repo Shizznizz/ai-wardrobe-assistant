@@ -4,24 +4,24 @@ import { UserPreferences, Outfit, ClothingItem } from '@/lib/types';
 import { OutfitLog } from '@/components/outfits/OutfitLogItem';
 
 // Set up Supabase client using environment variables
+// Support both VITE_SUPABASE_PUBLISHABLE_KEY (new) and VITE_SUPABASE_ANON_KEY (legacy)
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Validate required environment variables
+// Log warning instead of throwing to prevent blank screen
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
+  console.error(
     'Missing required Supabase environment variables. ' +
-    'Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in your .env file. ' +
-    'See .env.example for reference.'
+    'Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY are set in your .env file.'
   );
 }
 
-// Create the Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+// Create the Supabase client with fallback empty strings to prevent crash
+export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    storage: localStorage
+    storage: typeof window !== 'undefined' ? localStorage : undefined
   }
 });
 

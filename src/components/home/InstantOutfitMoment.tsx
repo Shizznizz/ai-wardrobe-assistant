@@ -49,6 +49,7 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
   const [loadingWeather, setLoadingWeather] = useState(true);
   const [generatedOutfits, setGeneratedOutfits] = useState<InstantOutfit[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [savedOutfits, setSavedOutfits] = useState<Set<string>>(new Set());
 
   // Auto-fetch weather on mount
@@ -115,6 +116,7 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
 
   const handleGenerate = async () => {
     setIsGenerating(true);
+    setGenerationError(null);
 
     try {
       const result = await generateInstantOutfits(
@@ -170,6 +172,7 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
       }
     } catch (error) {
       console.error('Failed to generate outfits:', error);
+      setGenerationError('Failed to generate outfits. Please try again.');
       toast.error('Failed to generate outfits. Please try again.');
     } finally {
       setIsGenerating(false);
@@ -426,6 +429,20 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
             )}
           </Button>
         </div>
+
+        {/* Error State */}
+        {generationError && (
+          <div className="mb-8 p-6 bg-red-500/10 border border-red-400/30 rounded-xl text-center">
+            <p className="text-red-300 mb-4">{generationError}</p>
+            <Button
+              onClick={handleGenerate}
+              variant="outline"
+              className="border-red-400/50 text-red-300 hover:bg-red-400/20"
+            >
+              Try Again
+            </Button>
+          </div>
+        )}
 
         {/* Generated Outfits */}
         {generatedOutfits.length > 0 && (
