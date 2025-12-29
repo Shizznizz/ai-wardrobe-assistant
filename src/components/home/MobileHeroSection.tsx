@@ -105,7 +105,6 @@ const MobileHeroSection = ({
           <img 
             src={imageSrc} 
             alt={imageAlt}
-            fetchPriority="high"
             className="max-h-[300px] w-full object-contain drop-shadow-lg"
             onError={() => setImageError(true)}
           />
