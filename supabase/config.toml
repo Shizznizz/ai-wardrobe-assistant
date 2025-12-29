@@ -63,3 +63,7 @@ verify_jwt = false
 [[edge_functions]]
 path = "remove-background"
 verify_jwt = false
+
+[[edge_functions]]
+path = "generate-style-summary"
+verify_jwt = false
