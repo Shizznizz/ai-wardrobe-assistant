@@ -1,47 +1,100 @@
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { UserPreferences, Outfit, ClothingItem } from '@/lib/types';
 import { OutfitLog } from '@/components/outfits/OutfitLogItem';
 
-// Set up Supabase client using environment variables
-// Support both VITE_SUPABASE_PUBLISHABLE_KEY (new) and VITE_SUPABASE_ANON_KEY (legacy)
+// Environment variables (read once at module load, but don't throw)
+// Support both VITE_SUPABASE_PUBLISHABLE_KEY (alias) and VITE_SUPABASE_ANON_KEY (canonical)
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-// Log warning instead of throwing to prevent blank screen
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error(
-    'Missing required Supabase environment variables. ' +
-    'Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY are set in your .env file.'
-  );
+// Validation result
+export interface SupabaseConfigStatus {
+  isValid: boolean;
+  missingVars: string[];
+  errorMessage: string | null;
 }
 
-// Create the Supabase client with fallback empty strings to prevent crash
-export const supabase = createClient(supabaseUrl || '', supabaseAnonKey || '', {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    storage: typeof window !== 'undefined' ? localStorage : undefined
+/**
+ * Validate Supabase configuration without throwing
+ * Safe to call at any time - returns status instead of crashing
+ */
+export function validateSupabaseConfig(): SupabaseConfigStatus {
+  const missing: string[] = [];
+
+  if (!supabaseUrl) missing.push('VITE_SUPABASE_URL');
+  if (!supabaseAnonKey) missing.push('VITE_SUPABASE_ANON_KEY');
+
+  if (missing.length > 0) {
+    return {
+      isValid: false,
+      missingVars: missing,
+      errorMessage: `Missing required environment variables: ${missing.join(', ')}. Please ensure these are set in your .env file. See .env.example for reference.`
+    };
   }
-});
+
+  return {
+    isValid: true,
+    missingVars: [],
+    errorMessage: null
+  };
+}
+
+// Cached Supabase client instance (lazy initialization)
+let supabaseClient: SupabaseClient | null = null;
+
+/**
+ * Get Supabase client with safe validation
+ * Returns null if configuration is invalid (instead of throwing)
+ * Logs error to console for debugging
+ */
+export function getSupabaseClient(): SupabaseClient | null {
+  // Return cached client if available
+  if (supabaseClient) return supabaseClient;
+
+  // Validate configuration
+  const config = validateSupabaseConfig();
+  if (!config.isValid) {
+    console.error('[Supabase Config Error]', config.errorMessage);
+    return null;
+  }
+
+  // Create and cache client
+  supabaseClient = createClient(supabaseUrl!, supabaseAnonKey!, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      storage: localStorage
+    }
+  });
+
+  return supabaseClient;
+}
+
+/**
+ * Legacy export for backwards compatibility
+ * Warning: This will be null if env vars are missing!
+ * Prefer using getSupabaseClient() for safer access
+ */
+export const supabase = getSupabaseClient();
 
 export const saveUserPreferences = async (userId: string, preferences: UserPreferences) => {
   try {
     console.log('Saving preferences for user:', userId);
-    
+
     const { data: existingPrefs, error: fetchError } = await supabase
       .from('user_preferences')
       .select('*')
       .eq('user_id', userId)
       .single();
-    
+
     if (fetchError && fetchError.code !== 'PGRST116') {
       console.error('Error fetching user preferences:', fetchError);
       return { success: false, error: fetchError };
     }
-    
+
     let result;
-    
+
     // Format the preferences for Supabase
     const preferencesData = {
       user_id: userId,
@@ -66,7 +119,7 @@ export const saveUserPreferences = async (userId: string, preferences: UserPrefe
       pronouns: preferences.pronouns,
       appearance_settings: preferences.appearanceSettings
     };
-    
+
     if (existingPrefs) {
       // Update existing preferences
       result = await supabase
@@ -79,30 +132,30 @@ export const saveUserPreferences = async (userId: string, preferences: UserPrefe
         .from('user_preferences')
         .insert([preferencesData]);
     }
-    
+
     if (result.error) {
       console.error('Error saving user preferences:', result.error);
       return { success: false, error: result.error };
     }
-    
+
     // Also save profile information (name, pronouns) in profiles table if provided
     if (preferences.firstName || preferences.lastName || preferences.pronouns) {
       const profileData: any = {};
       if (preferences.firstName) profileData.first_name = preferences.firstName;
       if (preferences.lastName) profileData.last_name = preferences.lastName;
       if (preferences.pronouns) profileData.pronouns = preferences.pronouns;
-      
+
       const { error: profileError } = await supabase
         .from('profiles')
         .update(profileData)
         .eq('id', userId);
-      
+
       if (profileError) {
         console.error('Error updating profile:', profileError);
         // Continue anyway since main preferences were saved
       }
     }
-    
+
     return { success: true };
   } catch (error) {
     console.error('Exception saving user preferences:', error);
@@ -117,16 +170,16 @@ export const getUserPreferences = async (userId: string) => {
       .select('*')
       .eq('user_id', userId)
       .single();
-    
+
     if (error) {
       console.error('Error fetching user preferences:', error);
       return { success: false, error };
     }
-    
+
     if (!data) {
       return { success: true, data: null };
     }
-    
+
     // Convert from database format to app format
     const preferences: UserPreferences = {
       favoriteColors: data.favorite_colors || [],
@@ -162,7 +215,7 @@ export const getUserPreferences = async (userId: string) => {
         reduceMotion: false
       }
     };
-    
+
     // Also get profile information
     try {
       const { data: profileData, error: profileError } = await supabase
@@ -170,7 +223,7 @@ export const getUserPreferences = async (userId: string) => {
         .select('first_name, last_name')
         .eq('id', userId)
         .single();
-      
+
       if (!profileError && profileData) {
         preferences.firstName = profileData.first_name;
         preferences.lastName = profileData.last_name;
@@ -178,7 +231,7 @@ export const getUserPreferences = async (userId: string) => {
     } catch (profileLookupError) {
       console.error('Error fetching profile data:', profileLookupError);
     }
-    
+
     return { success: true, data: preferences };
   } catch (error) {
     console.error('Exception fetching user preferences:', error);
@@ -193,18 +246,18 @@ export const getOutfitLogs = async (userId: string) => {
       .select('*')
       .eq('user_id', userId)
       .order('date', { ascending: false });
-    
+
     if (error) {
       console.error('Error fetching outfit logs:', error);
       return { success: false, error };
     }
-    
+
     // Convert date strings to Date objects
     const formattedLogs = data.map((log: any) => ({
       ...log,
       date: new Date(log.date)
     })) as OutfitLog[];
-    
+
     return { success: true, data: formattedLogs };
   } catch (error) {
     console.error('Exception fetching outfit logs:', error);
@@ -225,18 +278,18 @@ export const saveOutfitLog = async (userId: string, log: Omit<OutfitLog, 'id'>) 
       activity: log.activity || null,
       custom_activity: log.customActivity || null
     };
-    
+
     const { data, error } = await supabase
       .from('outfit_logs')
       .insert([logData])
       .select()
       .single();
-    
+
     if (error) {
       console.error('Error saving outfit log:', error);
       return { success: false, error };
     }
-    
+
     // Convert the returned data to OutfitLog format
     const savedLog: OutfitLog = {
       id: data.id,
@@ -250,7 +303,7 @@ export const saveOutfitLog = async (userId: string, log: Omit<OutfitLog, 'id'>) 
       customActivity: data.custom_activity,
       user_id: data.user_id
     };
-    
+
     return { success: true, data: savedLog };
   } catch (error) {
     console.error('Exception saving outfit log:', error);
@@ -262,11 +315,11 @@ export const updateOutfitLog = async (userId: string, logId: string, updates: Pa
   try {
     // Convert OutfitLog format to database format
     const updateData: any = {};
-    
+
     if (updates.outfitId !== undefined) updateData.outfit_id = updates.outfitId;
     if (updates.date !== undefined) {
-      updateData.date = updates.date instanceof Date 
-        ? updates.date.toISOString() 
+      updateData.date = updates.date instanceof Date
+        ? updates.date.toISOString()
         : new Date(updates.date).toISOString();
     }
     if (updates.timeOfDay !== undefined) updateData.time_of_day = updates.timeOfDay;
@@ -275,7 +328,7 @@ export const updateOutfitLog = async (userId: string, logId: string, updates: Pa
     if (updates.temperature !== undefined) updateData.temperature = updates.temperature;
     if (updates.activity !== undefined) updateData.activity = updates.activity;
     if (updates.customActivity !== undefined) updateData.custom_activity = updates.customActivity;
-    
+
     const { data, error } = await supabase
       .from('outfit_logs')
       .update(updateData)
@@ -283,12 +336,12 @@ export const updateOutfitLog = async (userId: string, logId: string, updates: Pa
       .eq('user_id', userId)
       .select()
       .single();
-    
+
     if (error) {
       console.error('Error updating outfit log:', error);
       return { success: false, error };
     }
-    
+
     // Convert the returned data to OutfitLog format
     const updatedLog: OutfitLog = {
       id: data.id,
@@ -302,7 +355,7 @@ export const updateOutfitLog = async (userId: string, logId: string, updates: Pa
       customActivity: data.custom_activity,
       user_id: data.user_id
     };
-    
+
     return { success: true, data: updatedLog };
   } catch (error) {
     console.error('Exception updating outfit log:', error);
@@ -317,12 +370,12 @@ export const deleteOutfitLog = async (userId: string, logId: string) => {
       .delete()
       .eq('id', logId)
       .eq('user_id', userId);
-    
+
     if (error) {
       console.error('Error deleting outfit log:', error);
       return { success: false, error };
     }
-    
+
     return { success: true };
   } catch (error) {
     console.error('Exception deleting outfit log:', error);

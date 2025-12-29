@@ -1,7 +1,7 @@
 
 import { useState, useEffect, createContext, useContext } from "react";
 import { Session, User } from "@supabase/supabase-js";
-import { supabase } from "@/integrations/supabase/client";
+import { getSupabaseClient } from "@/integrations/supabase/client";
 
 type AuthContextType = {
   session: Session | null;
@@ -24,6 +24,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    const supabase = getSupabaseClient();
+
+    // If Supabase is not configured, set loading to false and return
+    if (!supabase) {
+      console.warn('[Auth] Supabase client not available - auth features disabled');
+      setLoading(false);
+      return;
+    }
+
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -31,13 +40,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setSession(session);
         setUser(session?.user ?? null);
         setIsAuthenticated(!!session?.user);
-        
+
         // Handle premium status - Daniel should be treated as normal user
         // All other authenticated users get premium features
         if (session?.user) {
           const isDanielDeurloo = session.user.email === 'danieldeurloo@hotmail.com';
           setIsPremiumUser(!isDanielDeurloo);
-          
+
           // Check admin status
           setTimeout(async () => {
             try {
@@ -46,7 +55,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 .select('is_admin')
                 .eq('id', session.user.id)
                 .single();
-              
+
               setIsAdmin(data?.is_admin || false);
             } catch (error) {
               console.error('Error fetching admin status:', error);
@@ -57,7 +66,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setIsPremiumUser(false);
           setIsAdmin(false);
         }
-        
+
         setLoading(false);
       }
     );
@@ -68,12 +77,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setSession(session);
       setUser(session?.user ?? null);
       setIsAuthenticated(!!session?.user);
-      
+
       // Set premium status based on email for existing session
       if (session?.user) {
         const isDanielDeurloo = session.user.email === 'danieldeurloo@hotmail.com';
         setIsPremiumUser(!isDanielDeurloo);
-        
+
         // Check admin status for existing session
         setTimeout(async () => {
           try {
@@ -82,7 +91,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
               .select('is_admin')
               .eq('id', session.user.id)
               .single();
-            
+
             setIsAdmin(data?.is_admin || false);
           } catch (error) {
             console.error('Error fetching admin status:', error);
@@ -90,7 +99,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           }
         }, 0);
       }
-      
+
       setLoading(false);
     }).catch(error => {
       console.error("Error getting session:", error);
@@ -101,6 +110,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const signOut = async () => {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      console.warn('[Auth] Cannot sign out - Supabase client not available');
+      return;
+    }
+
     try {
       await supabase.auth.signOut();
     } catch (error) {

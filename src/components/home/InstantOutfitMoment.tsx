@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { getSupabaseClient } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Sparkles, Upload, Heart, Loader2, CloudRain, Sun, Cloud, Snowflake } from 'lucide-react';
 import {
@@ -77,6 +77,12 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
       }
 
       try {
+        const supabase = getSupabaseClient();
+        if (!supabase) {
+          console.warn('Supabase client not available - cannot fetch saved outfits');
+          return;
+        }
+
         // Create a unique key for each outfit based on its content
         const outfitKeys = generatedOutfits.map(outfit =>
           `${outfit.styleVibe}|${outfit.occasion}|${outfit.title}`
@@ -204,6 +210,12 @@ export default function InstantOutfitMoment({ hasWardrobeItems }: InstantOutfitM
     const isSaved = savedOutfits.has(outfitId);
 
     try {
+      const supabase = getSupabaseClient();
+      if (!supabase) {
+        toast.error('Configuration error. Please check your environment settings.');
+        return;
+      }
+
       if (isSaved) {
         // Unsave: Delete from database
         const { error } = await supabase

@@ -27,6 +27,7 @@ import { UserDataProvider } from '@/hooks/useUserData';
 import PageLayout from '@/components/shared/PageLayout';
 import ScrollToTop from '@/components/ScrollToTop';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import ConfigErrorBanner from '@/components/shared/ConfigErrorBanner';
 
 function App() {
   return (
@@ -35,6 +36,7 @@ function App() {
         <LocationProvider>
           <OutfitProvider>
             <Router>
+              <ConfigErrorBanner />
               <ScrollToTop />
               <Routes>
                 {/* Public routes */}
