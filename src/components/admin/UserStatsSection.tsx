@@ -118,7 +118,7 @@ const UserStatsSection = () => {
                   {userStats.recent_signups.slice(0, 5).map((signup, index) => (
                     <TableRow key={index} className="border-slate-700">
                       <TableCell className="text-white">
-                        {signup.first_name} {signup.last_name}
+                        {signup.first_name}
                       </TableCell>
                       <TableCell className="text-white/60">
                         {new Date(signup.created_at).toLocaleDateString()}

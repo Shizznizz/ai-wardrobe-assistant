@@ -5,17 +5,50 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Input validation helpers
+function validateString(value: unknown, fieldName: string, maxLength = 100): string {
+  if (typeof value !== 'string') {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    throw new Error(`${fieldName} cannot be empty`);
+  }
+  if (trimmed.length > maxLength) {
+    throw new Error(`${fieldName} must be less than ${maxLength} characters`);
+  }
+  // Only allow alphanumeric, spaces, hyphens, and common punctuation for city names
+  if (!/^[a-zA-Z\s\-'.,]+$/.test(trimmed)) {
+    throw new Error(`${fieldName} contains invalid characters`);
+  }
+  return trimmed;
+}
+
+function validateCountryCode(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== 'string') {
+    throw new Error('Country must be a string');
+  }
+  const trimmed = value.trim().toUpperCase();
+  if (trimmed.length > 0 && !/^[A-Z]{2,3}$/.test(trimmed)) {
+    throw new Error('Country code must be 2-3 letters');
+  }
+  return trimmed || undefined;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { city, country } = await req.json()
+    const body = await req.json()
+    
+    // Validate inputs
+    const city = validateString(body.city, 'City', 100);
+    const country = validateCountryCode(body.country);
 
-    if (!city) {
-      throw new Error('City is required')
-    }
+    console.log(`[get-weather] Fetching weather for city: ${city}, country: ${country || 'auto'}`);
 
     // Use Open-Meteo API (free, no API key needed)
     // First, get coordinates for the city
@@ -100,10 +133,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in get-weather function:', error)
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message || 'Invalid request' }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
+        status: error.message?.includes('must be') || error.message?.includes('cannot be') ? 400 : 500
       }
     )
   }

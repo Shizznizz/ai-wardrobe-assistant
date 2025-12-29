@@ -7,6 +7,55 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// Input validation helpers
+function validateUUID(value: unknown, fieldName: string): string {
+  if (typeof value !== 'string') {
+    throw new Error(`${fieldName} must be a string`);
+  }
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
+    throw new Error(`${fieldName} must be a valid UUID`);
+  }
+  return value;
+}
+
+interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+function validateMessages(value: unknown): ChatMessage[] {
+  if (!Array.isArray(value)) {
+    throw new Error('messages must be an array');
+  }
+  if (value.length === 0) {
+    throw new Error('messages cannot be empty');
+  }
+  if (value.length > 50) {
+    throw new Error('Too many messages (max 50)');
+  }
+  
+  const allowedRoles = ['user', 'assistant', 'system'];
+  
+  return value.map((msg, index) => {
+    if (typeof msg !== 'object' || msg === null) {
+      throw new Error(`messages[${index}] must be an object`);
+    }
+    if (!allowedRoles.includes(msg.role)) {
+      throw new Error(`messages[${index}].role must be 'user', 'assistant', or 'system'`);
+    }
+    if (typeof msg.content !== 'string') {
+      throw new Error(`messages[${index}].content must be a string`);
+    }
+    if (msg.content.length > 4000) {
+      throw new Error(`messages[${index}].content is too long (max 4000 characters)`);
+    }
+    return {
+      role: msg.role as 'user' | 'assistant' | 'system',
+      content: msg.content.slice(0, 4000) // Enforce limit
+    };
+  });
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -18,11 +67,13 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const { messages, userId } = await req.json()
-
-    if (!userId) {
-      throw new Error('User ID is required')
-    }
+    const body = await req.json()
+    
+    // Validate inputs
+    const userId = validateUUID(body.userId, 'userId');
+    const messages = validateMessages(body.messages);
+    
+    console.log(`[chat-with-olivia] Processing chat for user: ${userId}, messages: ${messages.length}`);
 
     // Check user's message limit
     const { data: chatLimits, error: limitsError } = await supabaseClient
@@ -473,11 +524,12 @@ After suggesting an outfit, always ask: "How does this outfit sound? Would you l
 
   } catch (error) {
     console.error('Error in chat-with-olivia function:', error)
+    const status = error.message?.includes('must be') || error.message?.includes('cannot be') || error.message?.includes('too long') ? 400 : 500;
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: error.message || 'Invalid request' }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 500
+        status
       }
     )
   }
