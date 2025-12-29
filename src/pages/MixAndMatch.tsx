@@ -18,6 +18,8 @@ import { AlertCircle, RefreshCw, CheckCircle2, WifiOff } from 'lucide-react';
 import MixMatchActions from '@/components/outfits/mix-match/MixMatchActions';
 import { Button } from '@/components/ui/button';
 import { getSupabaseClient } from '@/integrations/supabase/client';
+import OliviaChatPanel from '@/components/olivia/OliviaChatPanel';
+import OliviaChatBubble from '@/components/olivia/OliviaChatBubble';
 
 // localStorage keys for persistence
 const WEATHER_STORAGE_KEY = 'olivia_weather_preferences';
@@ -75,6 +77,7 @@ const MixAndMatch = () => {
   const [savedToday, setSavedToday] = useState<string[]>([]);
   const [supabaseAvailable, setSupabaseAvailable] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [showOliviaChat, setShowOliviaChat] = useState(false);
   
   // Check Supabase availability on mount
   useEffect(() => {
@@ -374,6 +377,19 @@ const MixAndMatch = () => {
         onOpenChange={setIsCreateOutfitDialogOpen}
         clothingItems={clothingItems}
         onSave={handleSaveOutfit}
+      />
+
+      {/* Olivia Chat Bubble */}
+      <OliviaChatBubble
+        isOpen={showOliviaChat}
+        onToggle={() => setShowOliviaChat(!showOliviaChat)}
+      />
+
+      {/* Olivia Chat Panel */}
+      <OliviaChatPanel
+        isOpen={showOliviaChat}
+        onClose={() => setShowOliviaChat(false)}
+        wardrobeCount={clothingItems?.length || null}
       />
     </div>
   );
