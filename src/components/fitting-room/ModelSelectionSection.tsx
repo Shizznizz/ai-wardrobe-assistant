@@ -231,7 +231,7 @@ const ModelSelectionSection = ({
           
           <h3 className="text-xl font-medium mb-2 text-white">Getting everything ready...</h3>
           <p className="text-white/70 text-center max-w-md">
-            We're preparing your virtual try-on experience. This will just take a moment.
+            We're preparing your photo for the studio preview. This will just take a moment.
           </p>
         </div>
       </motion.div>
@@ -249,7 +249,7 @@ const ModelSelectionSection = ({
         <OptionBox
           title="Choose a Photo"
           titleColor="text-blue-200"
-          description="Upload a full-body photo of yourself to see how outfits fit you."
+          description="Upload a full-body photo to get a clean, studio-ready preview."
           icon={<Upload className="h-5 w-5 mr-2" />}
           buttonText="Choose Photo"
           buttonVariant="default"
@@ -269,7 +269,7 @@ const ModelSelectionSection = ({
         <OptionBox
           title="Take a Photo"
           titleColor="text-green-200"
-          description="Use your device's camera to take a picture now for the try-on."
+          description="Use your device's camera to capture a photo for styling."
           icon={<Camera className="h-5 w-5 mr-2" />}
           buttonText="Take a Photo"
           buttonVariant="outline"
@@ -297,7 +297,7 @@ const ModelSelectionSection = ({
         <OptionBox
           title="Use Olivia Bloom"
           titleColor="text-purple-200"
-          description="Try outfits on our virtual AI model — Olivia — for a quick preview."
+          description="Preview outfits on Olivia — our AI model — for quick inspiration."
           icon={<User className="h-5 w-5 mr-2" />}
           buttonText="Choose Olivia"
           buttonVariant="outline"

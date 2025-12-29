@@ -152,8 +152,8 @@ const FittingRoom = () => {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 to-purple-950 text-white pb-20">
       <EnhancedHeroSection
-        title="Try On Your Wardrobe"
-        subtitle="See your favorite outfits come to life — on you or with Olivia's help."
+        title="Fit Preview Studio"
+        subtitle="Prep your photo for styling & try-on—clean background, perfect framing."
         image={{
           src: "/lovable-uploads/0e9ba14f-845b-4c56-a82c-5a616b0a3efb.png",
           alt: "Olivia in pink blouse and white pants",
@@ -162,7 +162,7 @@ const FittingRoom = () => {
         children={
           !userPhoto && (
             <ActionButton 
-              text="Start Now – Choose Your Model" 
+              text="Start Now – Upload Your Photo" 
               onClick={scrollToModelSection} 
             />
           )
@@ -181,7 +181,7 @@ const FittingRoom = () => {
           <Card className="glass-dark border-white/10 overflow-hidden shadow-lg">
             <div className="p-6">
               <h2 className="text-xl font-semibold mb-2 bg-clip-text text-transparent bg-gradient-to-r from-blue-300 to-purple-300">
-                Choose how you want to try outfits on.
+                Upload your photo for a studio-ready preview.
               </h2>
               
               <ModelSelectionSection 
