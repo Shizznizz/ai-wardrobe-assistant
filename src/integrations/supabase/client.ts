@@ -1,29 +1,81 @@
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { UserPreferences, Outfit, ClothingItem } from '@/lib/types';
 import { OutfitLog } from '@/components/outfits/OutfitLogItem';
 
-// Set up Supabase client using environment variables
+// Environment variables (read once at module load, but don't throw)
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Validate required environment variables
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'Missing required Supabase environment variables. ' +
-    'Please ensure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY are set in your .env file. ' +
-    'See .env.example for reference.'
-  );
+// Validation result
+export interface SupabaseConfigStatus {
+  isValid: boolean;
+  missingVars: string[];
+  errorMessage: string | null;
 }
 
-// Create the Supabase client
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    storage: localStorage
+/**
+ * Validate Supabase configuration without throwing
+ * Safe to call at any time - returns status instead of crashing
+ */
+export function validateSupabaseConfig(): SupabaseConfigStatus {
+  const missing: string[] = [];
+
+  if (!supabaseUrl) missing.push('VITE_SUPABASE_URL');
+  if (!supabaseAnonKey) missing.push('VITE_SUPABASE_ANON_KEY');
+
+  if (missing.length > 0) {
+    return {
+      isValid: false,
+      missingVars: missing,
+      errorMessage: `Missing required environment variables: ${missing.join(', ')}. Please ensure these are set in your .env file. See .env.example for reference.`
+    };
   }
-});
+
+  return {
+    isValid: true,
+    missingVars: [],
+    errorMessage: null
+  };
+}
+
+// Cached Supabase client instance (lazy initialization)
+let supabaseClient: SupabaseClient | null = null;
+
+/**
+ * Get Supabase client with safe validation
+ * Returns null if configuration is invalid (instead of throwing)
+ * Logs error to console for debugging
+ */
+export function getSupabaseClient(): SupabaseClient | null {
+  // Return cached client if available
+  if (supabaseClient) return supabaseClient;
+
+  // Validate configuration
+  const config = validateSupabaseConfig();
+  if (!config.isValid) {
+    console.error('[Supabase Config Error]', config.errorMessage);
+    return null;
+  }
+
+  // Create and cache client
+  supabaseClient = createClient(supabaseUrl!, supabaseAnonKey!, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      storage: localStorage
+    }
+  });
+
+  return supabaseClient;
+}
+
+/**
+ * Legacy export for backwards compatibility
+ * Warning: This will be null if env vars are missing!
+ * Prefer using getSupabaseClient() for safer access
+ */
+export const supabase = getSupabaseClient();
 
 export const saveUserPreferences = async (userId: string, preferences: UserPreferences) => {
   try {

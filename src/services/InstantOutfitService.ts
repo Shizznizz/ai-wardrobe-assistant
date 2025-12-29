@@ -1,5 +1,5 @@
 import { WeatherInfo } from '@/lib/types';
-import { supabase } from '@/integrations/supabase/client';
+import { getSupabaseClient } from '@/integrations/supabase/client';
 
 export interface InstantOutfit {
   id: string;
@@ -387,6 +387,12 @@ export async function generateInstantOutfits(
 
   // Try AI generation first
   try {
+    const supabase = getSupabaseClient();
+    if (!supabase) {
+      console.warn('[InstantOutfit] Supabase client not available - falling back to static database');
+      throw new Error('Supabase client not configured');
+    }
+
     const { data, error } = await supabase.functions.invoke('generate-instant-outfits', {
       body: {
         styleVibe,
