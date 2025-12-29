@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import HeroSection from '@/components/home/HeroSection';
@@ -17,13 +17,19 @@ import OliviasWeeklyTip from '@/components/home/OliviasWeeklyTip';
 import OliviasLookOfTheWeek from '@/components/home/OliviasLookOfTheWeek';
 import { CTAButton } from '@/components/ui/cta-button';
 import PremiumTeaserSection from '@/components/home/PremiumTeaserSection';
+import InstantOutfitMoment from '@/components/home/InstantOutfitMoment';
 import { Sparkles } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 const Home = () => {
   const navigate = useNavigate();
+  const { isAuthenticated, user } = useAuth();
   const [showOliviaDialog, setShowOliviaDialog] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const { hasSeenOnboarding } = useOnboardingState();
+  const [hasWardrobeItems, setHasWardrobeItems] = useState(false);
+  const [checkingWardrobe, setCheckingWardrobe] = useState(true);
   
   const handleStartJourney = () => {
     navigate('/my-wardrobe');
@@ -41,7 +47,52 @@ const Home = () => {
     setShowOliviaDialog(false);
     setShowOnboarding(true);
   };
-  
+
+  // Check if user has wardrobe items
+  useEffect(() => {
+    const checkWardrobe = async () => {
+      if (!isAuthenticated || !user?.id) {
+        setCheckingWardrobe(false);
+        setHasWardrobeItems(false);
+        return;
+      }
+
+      try {
+        // Try clothing_items first
+        const { data: clothingData, error: clothingError } = await supabase
+          .from('clothing_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .limit(1);
+
+        if (!clothingError && clothingData) {
+          setHasWardrobeItems(true);
+          setCheckingWardrobe(false);
+          return;
+        }
+
+        // Fallback to wardrobe_items
+        const { data: wardrobeData, error: wardrobeError } = await supabase
+          .from('wardrobe_items')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user.id)
+          .limit(1);
+
+        setHasWardrobeItems(!wardrobeError && !!wardrobeData);
+      } catch (error) {
+        console.error('Error checking wardrobe:', error);
+        setHasWardrobeItems(false);
+      } finally {
+        setCheckingWardrobe(false);
+      }
+    };
+
+    checkWardrobe();
+  }, [isAuthenticated, user]);
+
+  // Show Instant Outfit Moment for first-time users (logged out OR logged in with empty wardrobe)
+  const showInstantOutfit = !checkingWardrobe && (!isAuthenticated || !hasWardrobeItems);
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#12002f] to-[#1b013c] text-white">
       {/* Removing the duplicate Header component */}
@@ -67,7 +118,10 @@ const Home = () => {
         
         {/* 2. Trust Bar from home.tsx */}
         <TrustBar />
-        
+
+        {/* 2.5 Instant Outfit Moment - for first-time users */}
+        {showInstantOutfit && <InstantOutfitMoment hasWardrobeItems={hasWardrobeItems} />}
+
         {/* 3. Core Features Section with Meet Olivia button from home.tsx */}
         <CoreFeaturesSection onMeetOlivia={handleMeetOlivia} />
         
