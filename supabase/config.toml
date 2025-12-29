@@ -55,3 +55,11 @@ verify_jwt = false
 [[edge_functions]]
 path = "sync-fashion-trends"
 verify_jwt = false
+
+[[edge_functions]]
+path = "generate-instant-outfits"
+verify_jwt = false
+
+[[edge_functions]]
+path = "remove-background"
+verify_jwt = false

@@ -286,6 +286,45 @@ export type Database = {
         }
         Relationships: []
       }
+      instant_outfits_saved: {
+        Row: {
+          created_at: string
+          id: string
+          items: string[]
+          occasion: string
+          reasoning: string | null
+          style_vibe: string
+          title: string
+          updated_at: string
+          user_id: string
+          weather: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          items: string[]
+          occasion: string
+          reasoning?: string | null
+          style_vibe: string
+          title: string
+          updated_at?: string
+          user_id: string
+          weather: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          items?: string[]
+          occasion?: string
+          reasoning?: string | null
+          style_vibe?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+          weather?: string
+        }
+        Relationships: []
+      }
       olivia_learning_data: {
         Row: {
           context: Json | null
@@ -846,14 +885,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      clean_old_reminders: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      get_admin_analytics: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      clean_old_reminders: { Args: never; Returns: undefined }
+      get_admin_analytics: { Args: never; Returns: Json }
       increment_message_count: {
         Args: { user_id_param: string }
         Returns: undefined
