@@ -55,7 +55,9 @@ const FinalCta: React.FC<FinalCtaProps> = ({ onGetStarted }) => {
               <div className="relative z-10 h-auto max-h-[400px]">
                 <img 
                   src="/lovable-uploads/1edb18e4-ac7b-451e-9d08-56330d47a937.png" 
-                  alt="Olivia" 
+                  alt="Olivia"
+                  width={768}
+                  height={1152}
                   className="h-full w-auto object-contain drop-shadow-[0_0_15px_rgba(168,85,247,0.3)]"
                 />
               </div>
