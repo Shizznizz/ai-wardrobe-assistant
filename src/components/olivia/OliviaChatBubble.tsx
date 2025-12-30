@@ -1,91 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+
+// Real Olivia avatar image path
+const OLIVIA_AVATAR = '/lovable-uploads/5be0da00-2b86-420e-b2b4-3cc8e5e4dc1a.png';
 
 interface OliviaChatBubbleProps {
   isOpen: boolean;
   onToggle: () => void;
 }
-
-// Blonde Olivia Avatar SVG component - minimal, premium flat/vector style
-const OliviaAvatar = ({ className }: { className?: string }) => (
-  <svg 
-    viewBox="0 0 48 48" 
-    fill="none" 
-    xmlns="http://www.w3.org/2000/svg"
-    className={className}
-  >
-    {/* Hair background - blonde */}
-    <ellipse cx="24" cy="20" rx="16" ry="14" fill="url(#blonde-gradient)" />
-    
-    {/* Face */}
-    <ellipse cx="24" cy="26" rx="11" ry="12" fill="#FDDCBD" />
-    
-    {/* Hair front strands - blonde */}
-    <path 
-      d="M12 18C12 18 14 8 24 8C34 8 36 18 36 18C36 18 34 14 24 14C14 14 12 18 12 18Z" 
-      fill="url(#blonde-gradient-dark)"
-    />
-    
-    {/* Side hair waves */}
-    <path 
-      d="M10 20C10 20 8 28 10 34C10 34 12 30 12 24C12 18 10 20 10 20Z" 
-      fill="url(#blonde-gradient)"
-    />
-    <path 
-      d="M38 20C38 20 40 28 38 34C38 34 36 30 36 24C36 18 38 20 38 20Z" 
-      fill="url(#blonde-gradient)"
-    />
-    
-    {/* Eyes */}
-    <ellipse cx="20" cy="25" rx="2" ry="2.5" fill="#4A3728" />
-    <ellipse cx="28" cy="25" rx="2" ry="2.5" fill="#4A3728" />
-    
-    {/* Eye highlights */}
-    <circle cx="19.5" cy="24" r="0.8" fill="white" />
-    <circle cx="27.5" cy="24" r="0.8" fill="white" />
-    
-    {/* Eyebrows */}
-    <path d="M17 21.5C17.5 21 19 20.5 21.5 21" stroke="#B8956B" strokeWidth="0.8" strokeLinecap="round" />
-    <path d="M31 21.5C30.5 21 29 20.5 26.5 21" stroke="#B8956B" strokeWidth="0.8" strokeLinecap="round" />
-    
-    {/* Blush */}
-    <ellipse cx="16" cy="28" rx="2.5" ry="1.5" fill="#FFB5B5" fillOpacity="0.4" />
-    <ellipse cx="32" cy="28" rx="2.5" ry="1.5" fill="#FFB5B5" fillOpacity="0.4" />
-    
-    {/* Nose */}
-    <path d="M24 27V30" stroke="#E5C4A8" strokeWidth="0.8" strokeLinecap="round" />
-    
-    {/* Smile */}
-    <path 
-      d="M21 33C21 33 22.5 35 24 35C25.5 35 27 33 27 33" 
-      stroke="#D4736A" 
-      strokeWidth="1.2" 
-      strokeLinecap="round"
-    />
-    
-    {/* Lips highlight */}
-    <path 
-      d="M22 33.5C22 33.5 23 34.5 24 34.5C25 34.5 26 33.5 26 33.5" 
-      stroke="#E8847A" 
-      strokeWidth="0.6" 
-      strokeLinecap="round"
-    />
-    
-    {/* Gradient definitions */}
-    <defs>
-      <linearGradient id="blonde-gradient" x1="8" y1="8" x2="40" y2="32" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#F7E3B3" />
-        <stop offset="0.5" stopColor="#E8C97A" />
-        <stop offset="1" stopColor="#D4AF61" />
-      </linearGradient>
-      <linearGradient id="blonde-gradient-dark" x1="12" y1="8" x2="36" y2="20" gradientUnits="userSpaceOnUse">
-        <stop stopColor="#E8C97A" />
-        <stop offset="1" stopColor="#C9A456" />
-      </linearGradient>
-    </defs>
-  </svg>
-);
 
 // Get today's date key for localStorage
 const getTodayKey = () => {
@@ -211,9 +135,13 @@ const OliviaChatBubble: React.FC<OliviaChatBubbleProps> = ({ isOpen, onToggle })
                   animate={{ scale: 1, opacity: 1 }}
                   exit={{ scale: 0, opacity: 0 }}
                   transition={{ duration: 0.2 }}
-                  className="w-8 h-8 sm:w-10 sm:h-10"
+                  className="w-8 h-8 sm:w-10 sm:h-10 overflow-hidden rounded-full"
                 >
-                  <OliviaAvatar className="w-full h-full" />
+                  <img 
+                    src={OLIVIA_AVATAR} 
+                    alt="Olivia" 
+                    className="w-full h-full object-cover"
+                  />
                 </motion.div>
               )}
             </AnimatePresence>
