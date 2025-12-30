@@ -8,7 +8,7 @@ import { User, Settings, LogOut, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 
 const UserMenu = () => {
-  const { user, signOut } = useAuth();
+  const { user, signOut, isAdmin } = useAuth();
   const navigate = useNavigate();
   const [isSigningOut, setIsSigningOut] = useState(false);
 
@@ -38,7 +38,6 @@ const UserMenu = () => {
   }
 
   const initials = user.email?.substring(0, 2).toUpperCase() || 'U';
-  const isAdmin = user.email === 'danieldeurloo@hotmail.com';
 
   return (
     <DropdownMenu>
