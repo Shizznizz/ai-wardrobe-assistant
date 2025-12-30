@@ -47,16 +47,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           const isDanielDeurloo = session.user.email === 'danieldeurloo@hotmail.com';
           setIsPremiumUser(!isDanielDeurloo);
 
-          // Check admin status
+          // Check admin status via user_roles table (not profiles.is_admin)
           setTimeout(async () => {
             try {
               const { data } = await supabase
-                .from('profiles')
-                .select('is_admin')
-                .eq('id', session.user.id)
-                .single();
+                .from('user_roles')
+                .select('role')
+                .eq('user_id', session.user.id)
+                .eq('role', 'admin')
+                .maybeSingle();
 
-              setIsAdmin(data?.is_admin || false);
+              setIsAdmin(data !== null);
             } catch (error) {
               console.error('Error fetching admin status:', error);
               setIsAdmin(false);
@@ -83,16 +84,17 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const isDanielDeurloo = session.user.email === 'danieldeurloo@hotmail.com';
         setIsPremiumUser(!isDanielDeurloo);
 
-        // Check admin status for existing session
+        // Check admin status via user_roles table (not profiles.is_admin)
         setTimeout(async () => {
           try {
             const { data } = await supabase
-              .from('profiles')
-              .select('is_admin')
-              .eq('id', session.user.id)
-              .single();
+              .from('user_roles')
+              .select('role')
+              .eq('user_id', session.user.id)
+              .eq('role', 'admin')
+              .maybeSingle();
 
-            setIsAdmin(data?.is_admin || false);
+            setIsAdmin(data !== null);
           } catch (error) {
             console.error('Error fetching admin status:', error);
             setIsAdmin(false);
