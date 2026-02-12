@@ -24,101 +24,84 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
+    // getSupabaseClient() is guaranteed non-null (throws on init failure).
     const supabase = getSupabaseClient();
 
-    // If Supabase is not configured, set loading to false and return
-    if (!supabase) {
-      console.warn('[Auth] Supabase client not available - auth features disabled');
-      setLoading(false);
-      return;
-    }
+    // Guard against state updates after unmount or effect re-run.
+    let isCurrent = true;
 
-    // Set up auth state listener FIRST
+    // Fetches admin role and premium flag from DB in parallel.
+    // Returns safe defaults on error so the app never hangs on loading.
+    const resolveUserStatus = async (
+      userId: string
+    ): Promise<{ isAdmin: boolean; isPremium: boolean }> => {
+      try {
+        const [adminResult, premiumResult] = await Promise.all([
+          supabase
+            .from('user_roles')
+            .select('role')
+            .eq('user_id', userId)
+            .eq('role', 'admin')
+            .maybeSingle(),
+          // DB-driven premium: uses user_chat_limits.is_premium which is
+          // already the source of truth for all edge-function rate limits.
+          supabase
+            .from('user_chat_limits')
+            .select('is_premium')
+            .eq('user_id', userId)
+            .maybeSingle(),
+        ]);
+
+        return {
+          isAdmin: adminResult.data !== null,
+          isPremium: premiumResult.data?.is_premium === true,
+        };
+      } catch (error) {
+        console.error('Error resolving user status:', error);
+        return { isAdmin: false, isPremium: false };
+      }
+    };
+
+    // Single auth listener — onAuthStateChange fires immediately with the
+    // current session (INITIAL_SESSION event in Supabase JS v2), so a
+    // separate getSession() call is unnecessary and was previously causing
+    // a race condition with duplicate state writes and stale isAdmin.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
+        if (!isCurrent) return;
+
         console.log("Auth state changed:", event);
         setSession(session);
         setUser(session?.user ?? null);
         setIsAuthenticated(!!session?.user);
 
-        // Handle premium status - Daniel should be treated as normal user
-        // All other authenticated users get premium features
         if (session?.user) {
-          const isDanielDeurloo = session.user.email === 'danieldeurloo@hotmail.com';
-          setIsPremiumUser(!isDanielDeurloo);
-
-          // Check admin status via user_roles table (not profiles.is_admin)
-          setTimeout(async () => {
-            try {
-              const { data } = await supabase
-                .from('user_roles')
-                .select('role')
-                .eq('user_id', session.user.id)
-                .eq('role', 'admin')
-                .maybeSingle();
-
-              setIsAdmin(data !== null);
-            } catch (error) {
-              console.error('Error fetching admin status:', error);
-              setIsAdmin(false);
-            }
-          }, 0);
+          // Resolve admin + premium BEFORE setting loading=false so that
+          // downstream components (ProtectedRoute, AdminDashboard, etc.)
+          // never observe stale isAdmin or isPremiumUser on first render.
+          resolveUserStatus(session.user.id).then((status) => {
+            if (!isCurrent) return;
+            setIsAdmin(status.isAdmin);
+            setIsPremiumUser(status.isPremium);
+            setLoading(false);
+          });
         } else {
           setIsPremiumUser(false);
           setIsAdmin(false);
+          setLoading(false);
         }
-
-        setLoading(false);
       }
     );
 
-    // THEN check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log("Initial session check:", session ? "Session exists" : "No session");
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsAuthenticated(!!session?.user);
-
-      // Set premium status based on email for existing session
-      if (session?.user) {
-        const isDanielDeurloo = session.user.email === 'danieldeurloo@hotmail.com';
-        setIsPremiumUser(!isDanielDeurloo);
-
-        // Check admin status via user_roles table (not profiles.is_admin)
-        setTimeout(async () => {
-          try {
-            const { data } = await supabase
-              .from('user_roles')
-              .select('role')
-              .eq('user_id', session.user.id)
-              .eq('role', 'admin')
-              .maybeSingle();
-
-            setIsAdmin(data !== null);
-          } catch (error) {
-            console.error('Error fetching admin status:', error);
-            setIsAdmin(false);
-          }
-        }, 0);
-      }
-
-      setLoading(false);
-    }).catch(error => {
-      console.error("Error getting session:", error);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    return () => {
+      isCurrent = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {
-    const supabase = getSupabaseClient();
-    if (!supabase) {
-      console.warn('[Auth] Cannot sign out - Supabase client not available');
-      return;
-    }
-
     try {
+      const supabase = getSupabaseClient();
       await supabase.auth.signOut();
     } catch (error) {
       console.error("Error signing out:", error);

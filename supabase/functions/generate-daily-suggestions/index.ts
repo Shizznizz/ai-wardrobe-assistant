@@ -42,8 +42,8 @@ serve(async (req) => {
       try {
         // Fetch user data
         const [wardrobeRes, outfitsRes, prefsRes, weatherRes, trendsRes] = await Promise.all([
-          supabase.from('clothing_items').select('*').eq('user_id', user.user_id),
-          supabase.from('outfits').select('*').eq('user_id', user.user_id),
+          supabase.from('clothing_items').select('*').eq('user_id', user.user_id).is('deleted_at', null),
+          supabase.from('outfits').select('*').eq('user_id', user.user_id).is('deleted_at', null),
           supabase.from('user_preferences').select('*').eq('user_id', user.user_id).single(),
           fetch(`${supabaseUrl}/functions/v1/get-weather`, {
             method: 'POST',

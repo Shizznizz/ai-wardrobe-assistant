@@ -16,6 +16,19 @@ dist-ssr
 .env
 .env.local
 
+# Playwright
+playwright-report/
+test-results/
+
+# Claude Code
+.claude/
+
+# Windows artifacts
+nul
+
+# Stray npm prefix artifacts
+ProjectsAIWardrobeAssistant/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

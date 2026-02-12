@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireUser, authErrorResponse, AuthError } from '../_shared/auth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,16 +13,14 @@ serve(async (req) => {
   }
 
   try {
+    // ── JWT auth: verify caller identity ──
+    const { user: authedUser } = await requireUser(req)
+    const userId = authedUser.id
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
-
-    const { userId } = await req.json()
-
-    if (!userId) {
-      throw new Error('User ID is required')
-    }
 
     // Fetch last 50 learning interactions
     const { data: learningData, error } = await supabaseClient
@@ -167,10 +166,11 @@ serve(async (req) => {
     )
 
   } catch (error) {
+    if (error instanceof AuthError) return authErrorResponse(error)
     console.error('Error in analyze-user-patterns function:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
-      { 
+      {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500
       }

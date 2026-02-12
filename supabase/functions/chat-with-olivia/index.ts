@@ -1,6 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireUser, enforceUserIdMatch, authErrorResponse, AuthError } from '../_shared/auth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -62,20 +63,26 @@ serve(async (req) => {
   }
 
   try {
+    // ── JWT auth: verify caller identity ──
+    const { user: authedUser } = await requireUser(req)
+    const userId = authedUser.id
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
     const body = await req.json()
-    
+
+    // Reject if client sends a mismatched userId
+    enforceUserIdMatch(userId, body.userId)
+
     // Validate inputs
-    const userId = validateUUID(body.userId, 'userId');
     const messages = validateMessages(body.messages);
-    
+
     console.log(`[chat-with-olivia] Processing chat for user: ${userId}, messages: ${messages.length}`);
 
-    // Check user's message limit
+    // Check user's chat limit (uses chat_count, independent of generation_count)
     const { data: chatLimits, error: limitsError } = await supabaseClient
       .from('user_chat_limits')
       .select('*')
@@ -88,25 +95,28 @@ serve(async (req) => {
 
     if (chatLimits) {
       isPremium = chatLimits.is_premium
-      const lastMessageDate = new Date(chatLimits.last_message_at).toDateString()
-      
+      // Use chat-specific counter and timestamp for daily reset
+      const lastChatDate = chatLimits.last_chat_at
+        ? new Date(chatLimits.last_chat_at).toDateString()
+        : null
+
       // Reset count if it's a new day
-      if (lastMessageDate !== today) {
+      if (lastChatDate !== today) {
         currentCount = 0
       } else {
-        currentCount = chatLimits.message_count
+        currentCount = chatLimits.chat_count ?? 0
       }
     }
 
     // Check if free user has exceeded limit
     if (!isPremium && currentCount >= 5) {
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: 'Message limit reached',
           limitReached: true,
           messageCount: currentCount
         }),
-        { 
+        {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           status: 429
         }
@@ -141,8 +151,8 @@ serve(async (req) => {
       { data: fashionTrends }
     ] = await Promise.all([
       supabaseClient.from('user_preferences').select('*').eq('user_id', userId).maybeSingle(),
-      supabaseClient.from('clothing_items').select('*').eq('user_id', userId).order('favorite', { ascending: false }).order('last_worn', { ascending: true, nullsFirst: false }).limit(50),
-      supabaseClient.from('outfits').select('*').eq('user_id', userId).order('favorite', { ascending: false }).order('times_worn', { ascending: false }).limit(15),
+      supabaseClient.from('clothing_items').select('*').eq('user_id', userId).is('deleted_at', null).order('favorite', { ascending: false }).order('last_worn', { ascending: true, nullsFirst: false }).limit(50),
+      supabaseClient.from('outfits').select('*').eq('user_id', userId).is('deleted_at', null).order('favorite', { ascending: false }).order('times_worn', { ascending: false }).limit(15),
       supabaseClient.from('outfit_logs').select('*').eq('user_id', userId).order('date', { ascending: false }).limit(5),
       supabaseClient.from('profiles').select('first_name, pronouns').eq('id', userId).maybeSingle(),
       supabaseClient.from('olivia_learning_data').select('*').eq('user_id', userId).order('created_at', { ascending: false }).limit(20),
@@ -491,30 +501,24 @@ After suggesting an outfit, always ask: "How does this outfit sound? Would you l
     const openAIData = await openAIResponse.json()
     const reply = openAIData.choices[0]?.message?.content || "I'm sorry, I couldn't generate a response."
 
-    // Update or insert message count
+    // Increment chat_count AFTER a successful OpenAI response so that
+    // failed calls never consume a credit.
     const newCount = currentCount + 1
-    
-    if (chatLimits) {
-      await supabaseClient
-        .from('user_chat_limits')
-        .update({
-          message_count: newCount,
-          last_message_at: new Date().toISOString()
-        })
-        .eq('user_id', userId)
-    } else {
-      await supabaseClient
-        .from('user_chat_limits')
-        .insert({
-          user_id: userId,
-          message_count: newCount,
-          last_message_at: new Date().toISOString(),
-          is_premium: false
-        })
-    }
+    const now = new Date().toISOString()
+
+    // Upsert so that a missing row (e.g. pre-trigger signups) is created
+    // automatically and concurrent requests don't race on insert.
+    await supabaseClient
+      .from('user_chat_limits')
+      .upsert({
+        user_id: userId,
+        chat_count: newCount,
+        last_chat_at: now,
+        is_premium: isPremium
+      }, { onConflict: 'user_id' })
 
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         reply,
         messageCount: newCount,
         limitReached: !isPremium && newCount >= 5
@@ -523,11 +527,12 @@ After suggesting an outfit, always ask: "How does this outfit sound? Would you l
     )
 
   } catch (error) {
+    if (error instanceof AuthError) return authErrorResponse(error)
     console.error('Error in chat-with-olivia function:', error)
     const status = error.message?.includes('must be') || error.message?.includes('cannot be') || error.message?.includes('too long') ? 400 : 500;
     return new Response(
       JSON.stringify({ error: error.message || 'Invalid request' }),
-      { 
+      {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status
       }

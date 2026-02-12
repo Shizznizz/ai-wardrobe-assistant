@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { toast } from 'sonner';
 import { Outfit, ClothingItem } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 
 // Import mock data for initial demonstration
 import { mockClothingItems } from '@/data/mockClothingItems';
@@ -96,15 +97,44 @@ export const useShowroom = () => {
     toast.success("Reset completed");
   };
 
-  // Handle saving a look to user's collection
-  const handleSaveLook = () => {
+  // In-flight guard for saving looks
+  const [isSavingLook, setIsSavingLook] = useState(false);
+
+  // Handle saving a look to user's collection.
+  // The fitting room uses demo/mock outfits whose item IDs are not real
+  // clothing_items UUIDs, so we save the outfit metadata with an empty
+  // items array to avoid referencing non-existent rows.
+  const handleSaveLook = async () => {
     if (!finalImage || !selectedOutfit) {
       toast.error("No completed look to save");
       return;
     }
-    
-    // In a real app, this would save the look to the user's account
-    toast.success("Look saved to your collection!");
+    if (!user) {
+      toast.error("Please sign in to save looks");
+      return;
+    }
+    if (isSavingLook) return;
+    setIsSavingLook(true);
+    try {
+      const outfitData = {
+        user_id: user.id,
+        name: selectedOutfit.name || `Fitting Room Look – ${new Date().toLocaleDateString()}`,
+        items: [] as string[],
+        occasion: selectedOutfit.occasions?.[0] || 'casual',
+        season: selectedOutfit.seasons || ['all'],
+        favorite: false,
+        times_worn: 0,
+        date_added: new Date().toISOString()
+      };
+      const { error } = await supabase.from('outfits').insert(outfitData);
+      if (error) throw error;
+      toast.success("Look saved to your collection!");
+    } catch (err) {
+      console.error('Error saving look:', err);
+      toast.error("Failed to save look");
+    } finally {
+      setIsSavingLook(false);
+    }
   };
 
   // Handle AI suggesting another outfit

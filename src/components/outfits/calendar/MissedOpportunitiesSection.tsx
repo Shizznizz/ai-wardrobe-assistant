@@ -200,35 +200,50 @@ const MissedOpportunitiesSection = ({ outfitLogs, outfits, clothingItems = [] }:
               )}
               
               {opportunity.outfitId ? (
-                <div>
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-12 h-12 rounded-md overflow-hidden border border-purple-500/30">
-                      <img 
-                        src={getOutfitImage(opportunity.outfitId)} 
-                        alt="Outfit preview" 
-                        className="w-full h-full object-cover"
-                      />
+                getOutfitById(opportunity.outfitId) ? (
+                  <div>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="w-12 h-12 rounded-md overflow-hidden border border-purple-500/30">
+                        <img
+                          src={getOutfitImage(opportunity.outfitId)}
+                          alt="Outfit preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-white flex items-center gap-1 mb-1">
+                          <Check className="h-4 w-4 text-green-400" />
+                          <span>Outfit Assigned</span>
+                        </p>
+                        <p className="text-xs text-purple-300/80">
+                          {getOutfitById(opportunity.outfitId)?.name || "Outfit"}
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="text-sm text-white flex items-center gap-1 mb-1">
-                        <Check className="h-4 w-4 text-green-400" />
-                        <span>Outfit Assigned</span>
-                      </p>
-                      <p className="text-xs text-purple-300/80">
-                        {getOutfitById(opportunity.outfitId)?.name || "Outfit"}
-                      </p>
-                    </div>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full border-purple-500/20 hover:bg-purple-700/30 hover:border-purple-500/40 text-white"
+                      onClick={() => handleAssignOutfit(opportunity)}
+                    >
+                      <Edit className="h-3 w-3 mr-1" /> Edit Outfit
+                    </Button>
                   </div>
-                  
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="w-full border-purple-500/20 hover:bg-purple-700/30 hover:border-purple-500/40 text-white"
-                    onClick={() => handleAssignOutfit(opportunity)}
-                  >
-                    <Edit className="h-3 w-3 mr-1" /> Edit Outfit
-                  </Button>
-                </div>
+                ) : (
+                  /* Tombstone: assigned outfit was soft-deleted. */
+                  <div>
+                    <p className="text-sm text-slate-400 mb-2">Deleted outfit</p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full mt-1 bg-purple-800/30 hover:bg-purple-700/40"
+                      onClick={() => handleAssignOutfit(opportunity)}
+                    >
+                      Reassign Outfit
+                    </Button>
+                  </div>
+                )
               ) : (
                 <Button 
                   variant="secondary" 

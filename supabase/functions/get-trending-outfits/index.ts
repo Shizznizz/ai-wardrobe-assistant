@@ -92,7 +92,8 @@ async function getTrendingOutfits() {
     const { data: outfits, error: outfitsError } = await supabase
       .from('outfits')
       .select('*')
-      .in('id', topOutfitIds);
+      .in('id', topOutfitIds)
+      .is('deleted_at', null);
     
     if (outfitsError) {
       console.error('Error fetching outfit details:', outfitsError);

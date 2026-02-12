@@ -31,15 +31,19 @@ export function validateSupabaseConfig(): SupabaseConfigStatus {
 let supabaseClient: SupabaseClient | null = null;
 
 /**
- * Get Supabase client with safe validation
- * Returns null if configuration is invalid (instead of throwing)
- * Logs error to console for debugging
+ * Get Supabase client — guaranteed to return a valid client.
+ *
+ * With hardcoded config createClient always succeeds.  If the Supabase SDK
+ * ever throws (broken bundle, missing global), the error propagates to the
+ * React ErrorBoundary instead of causing silent null-reference crashes in
+ * every downstream caller.
  */
-export function getSupabaseClient(): SupabaseClient | null {
+export function getSupabaseClient(): SupabaseClient {
   // Return cached client if available
   if (supabaseClient) return supabaseClient;
 
-  // Create and cache client with hardcoded values
+  // Create and cache client with hardcoded values.
+  // This call is synchronous and deterministic — it cannot return null.
   supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
       persistSession: true,
@@ -52,11 +56,10 @@ export function getSupabaseClient(): SupabaseClient | null {
 }
 
 /**
- * Legacy export for backwards compatibility
- * Warning: This will be null if env vars are missing!
- * Prefer using getSupabaseClient() for safer access
+ * Module-level Supabase client instance.
+ * Always non-null — safe to use without a null check.
  */
-export const supabase = getSupabaseClient();
+export const supabase: SupabaseClient = getSupabaseClient();
 
 export const saveUserPreferences = async (userId: string, preferences: UserPreferences) => {
   try {

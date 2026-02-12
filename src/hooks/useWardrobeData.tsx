@@ -23,10 +23,12 @@ export const useWardrobeData = () => {
     setIsLoadingItems(true);
     try {
       // First try clothing_items table
+      // Soft-delete: exclude rows where deleted_at is set.
       const { data: clothingData, error: clothingError } = await supabase
         .from('clothing_items')
         .select('*')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .is('deleted_at', null);
       
       if (clothingError) {
         console.error('Error loading from clothing_items:', clothingError);
@@ -108,10 +110,12 @@ export const useWardrobeData = () => {
     
     setIsLoadingOutfits(true);
     try {
+      // Soft-delete: exclude rows where deleted_at is set.
       const { data, error } = await supabase
         .from('outfits')
         .select('*')
-        .eq('user_id', user.id);
+        .eq('user_id', user.id)
+        .is('deleted_at', null);
       
       if (error) {
         throw error;
@@ -266,21 +270,24 @@ export const useWardrobeData = () => {
     }
   };
 
-  // Delete a clothing item from Supabase
+  // Soft-delete a clothing item (sets deleted_at instead of removing the row).
   const deleteClothingItem = async (itemId: string) => {
     if (!user) return false;
-    
+
+    // Confirmation prompt — prevents accidental deletions.
+    if (!window.confirm('Delete this item from your wardrobe?')) return false;
+
     try {
       const { error } = await supabase
         .from('clothing_items')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', itemId)
         .eq('user_id', user.id);
-      
+
       if (error) {
         throw error;
       }
-      
+
       setClothingItems(prev => prev.filter(item => item.id !== itemId));
       return true;
     } catch (error) {
@@ -290,21 +297,24 @@ export const useWardrobeData = () => {
     }
   };
 
-  // Delete an outfit from Supabase
+  // Soft-delete an outfit (sets deleted_at instead of removing the row).
   const deleteOutfit = async (outfitId: string) => {
     if (!user) return false;
-    
+
+    // Confirmation prompt — prevents accidental deletions.
+    if (!window.confirm('Delete this outfit?')) return false;
+
     try {
       const { error } = await supabase
         .from('outfits')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() })
         .eq('id', outfitId)
         .eq('user_id', user.id);
-      
+
       if (error) {
         throw error;
       }
-      
+
       setOutfits(prev => prev.filter(outfit => outfit.id !== outfitId));
       return true;
     } catch (error) {

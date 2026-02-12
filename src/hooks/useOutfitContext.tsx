@@ -54,10 +54,12 @@ export const OutfitProvider = ({ children }: OutfitProviderProps) => {
       }
 
       try {
+        // Soft-delete: exclude rows where deleted_at is set.
         const { data, error } = await supabase
           .from('outfits')
           .select('*')
           .eq('user_id', user.id)
+          .is('deleted_at', null)
           .order('created_at', { ascending: false });
 
         if (error) throw error;
@@ -86,10 +88,12 @@ export const OutfitProvider = ({ children }: OutfitProviderProps) => {
       if (!user) return;
 
       try {
+        // Soft-delete: exclude rows where deleted_at is set.
         const { data, error } = await supabase
           .from('clothing_items')
           .select('*')
           .eq('user_id', user.id)
+          .is('deleted_at', null)
           .order('date_added', { ascending: false });
 
         if (error) throw error;

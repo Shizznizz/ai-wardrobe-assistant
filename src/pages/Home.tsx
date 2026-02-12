@@ -73,20 +73,22 @@ const Home = () => {
       }
 
       try {
-        // Try clothing_items first
+        // Try clothing_items first (exclude soft-deleted)
         const { data: clothingData, error: clothingError } = await supabase
           .from('clothing_items')
           .select('id', { count: 'exact', head: true })
           .eq('user_id', user.id)
+          .is('deleted_at', null)
           .limit(1);
 
         if (!clothingError && clothingData) {
           setHasWardrobeItems(true);
-          // Get actual count for chat context
+          // Get actual count for chat context (exclude soft-deleted)
           const { count } = await supabase
             .from('clothing_items')
             .select('*', { count: 'exact', head: true })
-            .eq('user_id', user.id);
+            .eq('user_id', user.id)
+            .is('deleted_at', null);
           setWardrobeCount(count || 0);
           setCheckingWardrobe(false);
           return;

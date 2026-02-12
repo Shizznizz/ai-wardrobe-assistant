@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-import Header from '@/components/Header';
-import { Outfit, ClothingItem } from '@/lib/types';
+import { Outfit, ClothingItem, MoodClothingItem } from '@/lib/types';
 import { useIsMobile } from '@/hooks/use-mobile';
 import OutfitSubscriptionPopup from '@/components/OutfitSubscriptionPopup';
 import OliviaImageGallery from '@/components/outfits/OliviaImageGallery';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useWardrobeData } from '@/hooks/useWardrobeData';
 import EnhancedHeroSection from '@/components/shared/EnhancedHeroSection';
 import { Button } from '@/components/ui/button';
 import { ArrowRight } from 'lucide-react';
@@ -23,7 +23,8 @@ import ShopTryFooter from '@/components/shop-try/ShopTryFooter';
 import FloatingOliviaWidget from '@/components/shop-try/FloatingOliviaWidget';
 
 const ShopAndTry = () => {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const { addClothingItem, addOutfit } = useWardrobeData();
   const [userPhoto, setUserPhoto] = useState<string | null>(null);
   const [clothingPhoto, setClothingPhoto] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -44,7 +45,13 @@ const ShopAndTry = () => {
   const [userCountry, setUserCountry] = useState<string | null>(null);
   const [mockOutfit, setMockOutfit] = useState<Outfit | null>(null);
   const [showFloatingChat, setShowFloatingChat] = useState(false);
-  
+  const [isSavingWardrobe, setIsSavingWardrobe] = useState(false);
+  const [isSavingWishlist, setIsSavingWishlist] = useState(false);
+  const [isSavingLook, setIsSavingLook] = useState(false);
+
+  // Maps mock item IDs → real clothing_items UUIDs after wardrobe save
+  const savedItemIds = useRef<Map<string, string>>(new Map());
+
   const isMobile = useIsMobile();
 
   const createMockItem = (overrides: any) => {
@@ -127,12 +134,45 @@ const ShopAndTry = () => {
     }, 1500);
   };
 
-  const handleSaveLook = () => {
+  const handleSaveLook = async () => {
     if (!finalImage) {
       toast.error("Create a look first!");
       return;
     }
-    toast.success("Look saved to your collection!");
+    if (!user) {
+      toast.error("Please sign in to save looks");
+      return;
+    }
+    if (isSavingLook) return;
+    setIsSavingLook(true);
+    try {
+      // Only include items that have been persisted to wardrobe (real DB UUIDs)
+      const realIds = selectedItems
+        .map(i => savedItemIds.current.get(i.id) || null)
+        .filter((id): id is string => id !== null);
+
+      if (selectedItems.length > 0 && realIds.length === 0) {
+        toast.error("Save items to your wardrobe first before saving the look");
+        return;
+      }
+
+      const result = await addOutfit({
+        name: `Shop & Try Look – ${new Date().toLocaleDateString()}`,
+        items: realIds,
+        occasion: 'casual',
+        seasons: ['all'],
+        favorite: false,
+        timesWorn: 0
+      });
+      if (result) {
+        toast.success("Look saved to your collection!");
+      }
+    } catch (err) {
+      console.error('Error saving look:', err);
+      toast.error("Failed to save look");
+    } finally {
+      setIsSavingLook(false);
+    }
   };
 
   const handleAddItem = (item: ClothingItem) => {
@@ -176,16 +216,75 @@ const ShopAndTry = () => {
     }
   };
 
-  const handleSaveToWishlist = (item: ClothingItem) => {
-    if (item) {
-      toast.success(`${item.name} added to wishlist!`);
-    } else {
-      toast.success("Item added to wishlist!");
+  // Core wishlist persistence. `showToast` allows callers that already show
+  // their own toast (e.g. ShopByMood) to suppress ours.
+  const persistWishlistItem = async (item: ClothingItem, showToast = true) => {
+    if (!item) return;
+    if (!user) {
+      toast.error("Please sign in to save to wishlist");
+      return;
+    }
+    if (isSavingWishlist) return;
+    setIsSavingWishlist(true);
+    try {
+      const { error } = await supabase.from('wishlist').insert({
+        user_id: user.id,
+        item_name: item.name || '',
+        // Use the product/affiliate URL when available, otherwise null
+        external_url: item.affiliateUrl || null,
+        external_image_url: item.imageUrl || item.image || null
+      });
+      if (error) {
+        if (error.code === '23505') {
+          toast.info("Already in your wishlist");
+        } else {
+          throw error;
+        }
+      } else if (showToast) {
+        toast.success(`${item.name} added to wishlist!`);
+      }
+    } catch (err) {
+      console.error('Error saving to wishlist:', err);
+      toast.error("Failed to save to wishlist");
+    } finally {
+      setIsSavingWishlist(false);
     }
   };
 
-  const handleSaveToWardrobe = (item: ClothingItem) => {
-    toast.success(`${item.name} added to wardrobe!`);
+  const handleSaveToWishlist = (item: ClothingItem) => {
+    persistWishlistItem(item, true);
+  };
+
+  const handleSaveToWardrobe = async (item: ClothingItem) => {
+    if (!user) {
+      toast.error("Please sign in to save to wardrobe");
+      return;
+    }
+    if (isSavingWardrobe) return;
+    setIsSavingWardrobe(true);
+    try {
+      const result = await addClothingItem({
+        name: item.name,
+        type: item.type || 'clothing',
+        color: item.color || 'unknown',
+        season: item.season || ['all'],
+        occasions: item.occasions || ['casual'],
+        image: item.imageUrl || item.image,
+        imageUrl: item.imageUrl || item.image,
+        favorite: false,
+        timesWorn: 0
+      });
+      if (result) {
+        // Track mock ID → real DB ID so Save Look can reference it
+        savedItemIds.current.set(item.id, result.id);
+        toast.success(`${item.name} added to wardrobe!`);
+      }
+    } catch (err) {
+      console.error('Error saving to wardrobe:', err);
+      toast.error("Failed to save to wardrobe");
+    } finally {
+      setIsSavingWardrobe(false);
+    }
   };
 
   const trackDailyDropClick = (itemId: string) => {
@@ -281,7 +380,7 @@ const ShopAndTry = () => {
   
   const handleSaveToWardrobeItemAdapter = (item: ClothingItem) => {
     if (item && item.id) {
-      handleSaveToWardrobeAdapter(item.id);
+      handleSaveToWardrobe(item);
     } else {
       toast.error("Invalid item");
     }
@@ -297,14 +396,10 @@ const ShopAndTry = () => {
     handleSeeHowToWear(mockItem);
   };
   
-  const onSaveToWishlistStringAdapter = (itemId: string) => {
-    const mockItem: ClothingItem = createMockItem({
-      id: itemId,
-      name: "Item " + itemId,
-      type: "top",
-      color: "black"
-    });
-    handleSaveToWishlist(mockItem);
+  // ShopByMood passes full MoodClothingItem via onAddToWishlist.
+  // Suppress our toast because ShopByMood shows its own.
+  const handleShopByMoodWishlist = (item: MoodClothingItem) => {
+    persistWishlistItem(item, false);
   };
   
   const handleTryOnTrendingItemForShopByMood = (item: ClothingItem) => {
@@ -325,7 +420,6 @@ const ShopAndTry = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-950 to-purple-950 text-white overflow-x-hidden">
-      <Header />
       
       <EnhancedHeroSection
         title="Shop & Try Fashion"
@@ -398,13 +492,13 @@ const ShopAndTry = () => {
           showFeedback={showFeedback}
         />
         
-        <ShopByMood 
+        <ShopByMood
           onTryItem={handleTryOnTrendingItemForShopByMood}
           onStylistSuggestion={handleStylistSuggestionForShopByMood}
           onUpgradeToPremium={handleShowPremiumPopup}
           activeMood={activeMood}
           onMoodSelect={handleSetActiveMood}
-          onSaveToWishlist={onSaveToWishlistStringAdapter}
+          onAddToWishlist={handleShopByMoodWishlist}
         />
         
         <EditorsPicks

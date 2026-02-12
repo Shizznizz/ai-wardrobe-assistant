@@ -20,8 +20,6 @@ export function useCalendarState(initialOutfits: Outfit[], initialClothingItems:
   useEffect(() => {
     if (user) {
       loadOutfitLogs();
-    } else {
-      loadFromLocalStorage();
     }
   }, [user]);
   
@@ -54,34 +52,18 @@ export function useCalendarState(initialOutfits: Outfit[], initialClothingItems:
     }
   };
   
-  const loadFromLocalStorage = () => {
-    try {
-      const savedLogs = localStorage.getItem('outfitLogs');
-      if (savedLogs) {
-        const parsedLogs = JSON.parse(savedLogs);
-        // Convert string dates back to Date objects
-        const formattedLogs = parsedLogs.map((log: any) => ({
-          ...log,
-          date: new Date(log.date)
-        }));
-        setOutfitLogs(formattedLogs);
-        console.log('Loaded outfit logs from localStorage:', formattedLogs.length);
-      }
-    } catch (error) {
-      console.error('Error loading outfit logs from localStorage:', error);
-    }
-  };
-
   // Validate outfit exists and belongs to user
   const validateOutfit = async (outfitId: string): Promise<boolean> => {
     if (!user || outfitId === 'activity') return true;
     
     try {
+      // Soft-delete: exclude outfits where deleted_at is set.
       const { data, error } = await supabase
         .from('outfits')
         .select('id')
         .eq('id', outfitId)
         .eq('user_id', user.id)
+        .is('deleted_at', null)
         .maybeSingle();
       
       if (error) {
@@ -122,47 +104,32 @@ export function useCalendarState(initialOutfits: Outfit[], initialClothingItems:
         return null;
       }
 
-      if (user) {
-        // Add to Supabase
-        console.log('Saving outfit log to Supabase for user:', user.id);
-        const { success, data, error } = await saveSBOutfitLog(user.id, log);
-        
-        if (!success || error) {
-          console.error('Error adding outfit log to Supabase:', error);
-          toast.error('Failed to save outfit log');
-          return null;
-        }
-        
-        if (data) {
-          // Format the date if necessary
-          const formattedData = {
-            ...data,
-            date: new Date(data.date)
-          };
-          
-          // Add to state immediately for UI responsiveness
-          setOutfitLogs(prev => [...prev, formattedData]);
-          console.log('Outfit log saved successfully to Supabase');
-          return formattedData;
-        }
-      } else {
-        // For non-logged in users, save to localStorage
-        const newLog: OutfitLog = {
-          id: Date.now().toString(),
-          ...log
+      if (!user) {
+        toast.error('Please sign in to log outfits');
+        return null;
+      }
+
+      // Add to Supabase
+      console.log('Saving outfit log to Supabase for user:', user.id);
+      const { success, data, error } = await saveSBOutfitLog(user.id, log);
+
+      if (!success || error) {
+        console.error('Error adding outfit log to Supabase:', error);
+        toast.error('Failed to save outfit log');
+        return null;
+      }
+
+      if (data) {
+        // Format the date if necessary
+        const formattedData = {
+          ...data,
+          date: new Date(data.date)
         };
-        
-        const updatedLogs = [...outfitLogs, newLog];
-        setOutfitLogs(updatedLogs);
-        
-        // Store the date as ISO string for localStorage
-        const logsForStorage = updatedLogs.map(log => ({
-          ...log,
-          date: log.date instanceof Date ? log.date.toISOString() : log.date
-        }));
-        localStorage.setItem('outfitLogs', JSON.stringify(logsForStorage));
-        console.log('Outfit log saved successfully to localStorage');
-        return newLog;
+
+        // Add to state immediately for UI responsiveness
+        setOutfitLogs(prev => [...prev, formattedData]);
+        console.log('Outfit log saved successfully to Supabase');
+        return formattedData;
       }
     } catch (error) {
       console.error('Failed to add outfit log:', error);
@@ -185,46 +152,30 @@ export function useCalendarState(initialOutfits: Outfit[], initialClothingItems:
         }
       }
 
-      if (user) {
-        // Update in Supabase
-        const { success, data, error } = await updateSBOutfitLog(user.id, id, updates);
-        
-        if (!success || error) {
-          console.error('Error updating outfit log in Supabase:', error);
-          toast.error('Failed to update outfit log');
-          return false;
-        }
-        
-        if (data) {
-          // Format the date if necessary
-          const formattedData = {
-            ...data,
-            date: new Date(data.date)
-          };
-          
-          // Update in state
-          setOutfitLogs(prev => prev.map(log => log.id === id ? formattedData : log));
-          console.log('Outfit log updated successfully in Supabase');
-          return true;
-        }
-      } else {
-        // For non-logged in users, update in localStorage
-        const updatedLogs = outfitLogs.map(log => {
-          if (log.id === id) {
-            return { ...log, ...updates };
-          }
-          return log;
-        });
-        
-        setOutfitLogs(updatedLogs);
-        
-        // Store the date as ISO string for localStorage
-        const logsForStorage = updatedLogs.map(log => ({
-          ...log,
-          date: log.date instanceof Date ? log.date.toISOString() : log.date
-        }));
-        localStorage.setItem('outfitLogs', JSON.stringify(logsForStorage));
-        console.log('Outfit log updated successfully in localStorage');
+      if (!user) {
+        toast.error('Please sign in to update outfit logs');
+        return false;
+      }
+
+      // Update in Supabase
+      const { success, data, error } = await updateSBOutfitLog(user.id, id, updates);
+
+      if (!success || error) {
+        console.error('Error updating outfit log in Supabase:', error);
+        toast.error('Failed to update outfit log');
+        return false;
+      }
+
+      if (data) {
+        // Format the date if necessary
+        const formattedData = {
+          ...data,
+          date: new Date(data.date)
+        };
+
+        // Update in state
+        setOutfitLogs(prev => prev.map(log => log.id === id ? formattedData : log));
+        console.log('Outfit log updated successfully in Supabase');
         return true;
       }
     } catch (error) {
@@ -277,35 +228,25 @@ export function useCalendarState(initialOutfits: Outfit[], initialClothingItems:
     try {
       console.log('Deleting outfit log:', id);
       
-      if (user) {
-        // Delete from Supabase
-        const { success, error } = await deleteSBOutfitLog(user.id, id);
-        
-        if (!success || error) {
-          console.error('Error deleting outfit log from Supabase:', error);
-          toast.error('Failed to delete outfit log');
-          return false;
-        }
-        
-        console.log('Outfit log deleted successfully from Supabase');
+      if (!user) {
+        toast.error('Please sign in to delete outfit logs');
+        return false;
       }
-      
+
+      // Delete from Supabase
+      const { success, error } = await deleteSBOutfitLog(user.id, id);
+
+      if (!success || error) {
+        console.error('Error deleting outfit log from Supabase:', error);
+        toast.error('Failed to delete outfit log');
+        return false;
+      }
+
+      console.log('Outfit log deleted successfully from Supabase');
+
       // Update state immediately for UI responsiveness
       setOutfitLogs(prev => prev.filter(log => log.id !== id));
-      
-      // Update localStorage for non-logged in users
-      if (!user) {
-        const updatedLogs = outfitLogs.filter(log => log.id !== id);
-        
-        // Store the date as ISO string for localStorage
-        const logsForStorage = updatedLogs.map(log => ({
-          ...log,
-          date: log.date instanceof Date ? log.date.toISOString() : log.date
-        }));
-        localStorage.setItem('outfitLogs', JSON.stringify(logsForStorage));
-        console.log('Outfit log deleted successfully from localStorage');
-      }
-      
+
       return true;
     } catch (error) {
       console.error('Failed to delete outfit log:', error);

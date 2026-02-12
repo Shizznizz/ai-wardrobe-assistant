@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { requireUser, enforceUserIdMatch, authErrorResponse, AuthError } from '../_shared/auth.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -78,15 +79,21 @@ serve(async (req) => {
   }
 
   try {
+    // ── JWT auth: verify caller identity ──
+    const { user: authedUser } = await requireUser(req)
+    const userId = authedUser.id
+
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
     const body = await req.json()
-    
+
+    // Reject if client sends a mismatched userId
+    enforceUserIdMatch(userId, body.userId)
+
     // Validate all inputs
-    const userId = validateUUID(body.userId, 'userId');
     const interactionType = validateInteractionType(body.interactionType);
     const rating = validateRating(body.rating);
     const feedbackText = validateOptionalString(body.feedbackText, 'feedbackText', 1000);
@@ -125,6 +132,7 @@ serve(async (req) => {
     )
 
   } catch (error) {
+    if (error instanceof AuthError) return authErrorResponse(error)
     console.error('Error in save-outfit-feedback function:', error)
     const status = error.message?.includes('must be') || error.message?.includes('too large') ? 400 : 500;
     return new Response(

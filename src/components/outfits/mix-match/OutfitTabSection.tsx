@@ -164,11 +164,11 @@ const OutfitTabSection = ({
     setIsDeleting(true);
     
     try {
-      // If user is logged in, delete from Supabase first
+      // Soft-delete: set deleted_at instead of removing the row.
       if (user?.id) {
         const { error } = await supabase
           .from('outfits')
-          .delete()
+          .update({ deleted_at: new Date().toISOString() })
           .eq('id', outfitToDelete);
           
         if (error) {

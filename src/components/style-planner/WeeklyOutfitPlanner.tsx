@@ -29,7 +29,7 @@ const WeeklyOutfitPlanner = ({
 }: WeeklyOutfitPlannerProps) => {
   const { user } = useAuth();
   const [isGenerating, setIsGenerating] = useState(false);
-  const [weeklyPlan, setWeeklyPlan] = useState<Record<string, { outfit?: Outfit; tip?: string }>>({});
+  const [weeklyPlan, setWeeklyPlan] = useState<Record<string, { outfit?: Outfit; tip?: string; deleted?: boolean }>>({});
 
   const startOfCurrentWeek = startOfWeek(new Date(), { weekStartsOn: 0 });
   const weekDays = Array.from({ length: 7 }, (_, index) => {
@@ -61,6 +61,9 @@ const WeeklyOutfitPlanner = ({
             outfit,
             tip: generateStyleTip(outfit, dayName, date)
           };
+        } else if (existingLog.outfitId && existingLog.outfitId !== 'activity') {
+          // Tombstone: the logged outfit was soft-deleted.
+          plan[dateStr] = { deleted: true };
         }
       }
     });
@@ -276,7 +279,33 @@ const WeeklyOutfitPlanner = ({
             {weekDays.map(({ date, dayName }) => {
               const dateStr = format(date, 'yyyy-MM-dd');
               const dayPlan = weeklyPlan[dateStr];
-              
+
+              // Tombstone: the logged outfit was soft-deleted.
+              if (dayPlan?.deleted) {
+                return (
+                  <Card key={dateStr} className="glass-dark border-white/10 overflow-hidden">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-medium text-white">{dayName}</h3>
+                          <span className="text-xs text-white/60">
+                            {format(date, 'MMM d')}
+                          </span>
+                        </div>
+                      </div>
+                      <p className="text-sm text-slate-400 mb-4">Deleted outfit</p>
+                      <Button
+                        onClick={() => chooseOutfitForDay(date)}
+                        className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white"
+                        size="sm"
+                      >
+                        Choose Outfit
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              }
+
               return (
                 <OutfitPreviewCard
                   key={dateStr}

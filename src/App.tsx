@@ -28,9 +28,11 @@ import PageLayout from '@/components/shared/PageLayout';
 import ScrollToTop from '@/components/ScrollToTop';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
 import ConfigErrorBanner from '@/components/shared/ConfigErrorBanner';
+import ErrorBoundary from '@/components/ErrorBoundary';
 
 function App() {
   return (
+    <ErrorBoundary>
     <AuthProvider>
       <UserDataProvider>
         <LocationProvider>
@@ -102,6 +104,24 @@ function App() {
                     <AdminDashboard />
                   </ProtectedRoute>
                 } />
+
+                {/* Catch-all — prevents a blank white screen on unknown paths */}
+                <Route path="*" element={
+                  <PageLayout>
+                    <div className="min-h-[60vh] flex items-center justify-center">
+                      <div className="text-center">
+                        <h1 className="text-4xl font-bold text-white mb-2">404</h1>
+                        <p className="text-purple-300 mb-6">Page not found</p>
+                        <a
+                          href="/"
+                          className="px-6 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg transition-colors inline-block"
+                        >
+                          Go Home
+                        </a>
+                      </div>
+                    </div>
+                  </PageLayout>
+                } />
               </Routes>
             </Router>
             <Toaster position="top-center" richColors closeButton />
@@ -109,6 +129,7 @@ function App() {
         </LocationProvider>
       </UserDataProvider>
     </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

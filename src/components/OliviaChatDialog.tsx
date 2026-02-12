@@ -56,35 +56,43 @@ const OliviaChatDialog = ({ isOpen, onClose, initialMessage = "Hi! I'm Olivia Bl
     }
   }, [isOpen]);
 
-  // Get user message count on initial load
+  // Fetch today's chat usage from user_chat_limits (the source of truth
+  // for rate limiting, introduced in Fixpack 2).
   useEffect(() => {
     const fetchMessageCount = async () => {
       if (!user) return;
-      
+
       try {
         const { data, error } = await supabase
-          .from('user_preferences')
-          .select('message_count')
+          .from('user_chat_limits')
+          .select('chat_count, last_chat_at, is_premium')
           .eq('user_id', user.id)
           .maybeSingle();
-        
+
         if (error) {
-          console.error('Error fetching message count:', error);
+          console.error('Error fetching chat count:', error);
           return;
         }
-        
-        if (data && data.message_count) {
-          setMessageCount(data.message_count);
-          // If they've already reached the limit, show the limit reached message
-          if (data.message_count > 5) {
+
+        if (data) {
+          const today = new Date().toDateString();
+          const lastChatDate = data.last_chat_at
+            ? new Date(data.last_chat_at).toDateString()
+            : null;
+
+          // Counter resets daily — same logic as the edge function.
+          const currentCount = lastChatDate === today ? (data.chat_count ?? 0) : 0;
+          setMessageCount(currentCount);
+
+          if (!data.is_premium && currentCount >= 5) {
             setLimitReached(true);
           }
         }
       } catch (error) {
-        console.error('Error getting message count:', error);
+        console.error('Error getting chat count:', error);
       }
     };
-    
+
     if (isOpen && user) {
       fetchMessageCount();
     }

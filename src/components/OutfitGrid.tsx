@@ -43,10 +43,12 @@ const OutfitGrid = ({
       setIsLoading(true);
       const fetchOutfits = async () => {
         try {
+          // Soft-delete: exclude rows where deleted_at is set.
           const { data: outfitsData, error: outfitsError } = await supabase
             .from('outfits')
             .select('*')
             .eq('user_id', user.id)
+            .is('deleted_at', null)
             .order('created_at', { ascending: false });
           
           if (outfitsError) {
@@ -105,17 +107,21 @@ const OutfitGrid = ({
     }
   };
 
+  // Soft-delete: sets deleted_at instead of removing the row.
   const handleDelete = async (id: string) => {
+    // Confirmation prompt — prevents accidental deletions.
+    if (!window.confirm('Delete this outfit?')) return;
+
     if (user && fetchFromSupabase) {
       try {
         const { error } = await supabase
           .from('outfits')
-          .delete()
+          .update({ deleted_at: new Date().toISOString() })
           .eq('id', id)
           .eq('user_id', user.id);
 
         if (error) throw error;
-        
+
         setUserOutfits(prev => prev.filter(outfit => outfit.id !== id));
         toast.success('Outfit deleted successfully');
       } catch (error) {

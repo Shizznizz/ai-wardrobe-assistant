@@ -65,25 +65,29 @@ const OliviaStyleChatDialog = ({ isOpen, onClose, selectedDate }: OliviaStyleCha
       if (!user) return;
       
       try {
+        // Read chat-specific counter (chat_count / last_chat_at), independent
+        // of generation_count used by instant-outfit generation.
         const { data, error } = await supabase
           .from('user_chat_limits')
-          .select('message_count, last_message_at, is_premium')
+          .select('chat_count, last_chat_at, is_premium')
           .eq('user_id', user.id)
           .maybeSingle();
-        
+
         if (error) {
           console.error('Error fetching message count:', error);
           return;
         }
-        
+
         if (data) {
           const today = new Date().toDateString();
-          const lastMessageDate = new Date(data.last_message_at).toDateString();
-          
+          const lastChatDate = data.last_chat_at
+            ? new Date(data.last_chat_at).toDateString()
+            : null;
+
           // Reset count if it's a new day
-          const currentCount = lastMessageDate === today ? data.message_count : 0;
+          const currentCount = lastChatDate === today ? (data.chat_count ?? 0) : 0;
           setMessageCount(currentCount);
-          
+
           // Check if they've already reached the limit (for non-premium users)
           if (!data.is_premium && currentCount >= 5) {
             setLimitReached(true);

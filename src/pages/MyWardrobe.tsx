@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { Sparkles } from 'lucide-react';
 
 import { ClothingItem, ClothingSeason } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
@@ -14,6 +16,7 @@ import WardrobeEmptyState from '@/components/wardrobe/WardrobeEmptyState';
 import WardrobeMainContent from '@/components/wardrobe/WardrobeMainContent';
 
 const MyWardrobe = () => {
+  const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
   const { clothingItems, isLoadingItems, addClothingItem, deleteClothingItem, updateClothingItem } = useWardrobeData();
   
@@ -246,7 +249,7 @@ const MyWardrobe = () => {
         />
         
         {/* Main Content */}
-        <WardrobeMainContent 
+        <WardrobeMainContent
           isLoadingItems={isLoadingItems}
           filterApplied={filterApplied}
           filteredItems={filteredItems}
@@ -259,6 +262,24 @@ const MyWardrobe = () => {
           viewMode={viewMode}
           showCompactView={showCompactView}
         />
+
+        {/* CTA to Mix & Match — shown when wardrobe has items */}
+        {!isLoadingItems && cachedItems.length > 0 && (
+          <motion.div
+            className="mt-8 mb-4 text-center"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <button
+              onClick={() => navigate('/mix-and-match')}
+              className="inline-flex items-center gap-2 text-purple-300 hover:text-white transition-colors text-sm font-medium"
+            >
+              <Sparkles className="h-4 w-4" />
+              Ready to create outfits? Let Olivia style you
+            </button>
+          </motion.div>
+        )}
       </div>
     </div>
   );

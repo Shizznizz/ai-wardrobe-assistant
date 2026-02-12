@@ -177,6 +177,7 @@ async function fetchSampleOutfits(): Promise<any[]> {
     const { data, error } = await supabase
       .from('outfits')
       .select('*')
+      .is('deleted_at', null)
       .limit(20);
       
     if (error) {
@@ -219,7 +220,8 @@ async function generateSeasonalOutfits(season: string, weather: { temp: number, 
       const { data: outfits, error: outfitsError } = await supabase
         .from('outfits')
         .select('*')
-        .in('id', outfitIds);
+        .in('id', outfitIds)
+        .is('deleted_at', null);
         
       if (!outfitsError && outfits && outfits.length > 0) {
         console.log('Returning cached seasonal outfits');

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { requireUser, enforceUserIdMatch, authErrorResponse, AuthError } from '../_shared/auth.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -99,50 +100,62 @@ serve(async (req) => {
       throw new Error('OPENAI_API_KEY not configured');
     }
 
+    // ── JWT auth: verify caller identity ──
+    const { user: authedUser } = await requireUser(req);
+    const userId = authedUser.id;
+
     const supabaseClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const body = await req.json();
-    
+
+    // Reject if client sends a mismatched userId
+    enforceUserIdMatch(userId, body.userId);
+
     // Validate all inputs
     const styleVibe = validateRequiredString(body.styleVibe, 'styleVibe', 50);
     const occasion = validateRequiredString(body.occasion, 'occasion', 100);
     const weather = validateRequiredString(body.weather, 'weather', 50);
     const colorFamily = validateOptionalString(body.colorFamily, 'colorFamily', 50);
     const comfortLevel = validateOptionalString(body.comfortLevel, 'comfortLevel', 30);
-    const userId = validateOptionalUUID(body.userId, 'userId');
 
-    let userType = userId ? 'free' : 'logged_out';
+    let userType = 'free';
     let isPremium = false;
+    // Captured here so the post-success increment can reuse them.
+    let limitRow: any = null;
+    let currentGenCount = 0;
 
-    // Rate limiting for logged-in users
-    if (userId) {
+    // Rate limiting (uses generation_count, independent of chat_count
+    // so chat usage never eats generation credits).
+    {
       const { data: limitData, error: limitsError } = await supabaseClient
         .from('user_chat_limits')
         .select('*')
         .eq('user_id', userId)
         .maybeSingle();
 
-      let currentCount = 0;
+      limitRow = limitData;
       const today = new Date().toDateString();
 
       if (limitData) {
         isPremium = limitData.is_premium;
         userType = isPremium ? 'premium' : 'free';
-        const lastMessageDate = new Date(limitData.last_message_at).toDateString();
+        const lastGenDate = limitData.last_generation_at
+          ? new Date(limitData.last_generation_at).toDateString()
+          : null;
 
         // Reset count if it's a new day
-        if (lastMessageDate !== today) {
-          currentCount = 0;
+        if (lastGenDate !== today) {
+          currentGenCount = 0;
         } else {
-          currentCount = limitData.message_count;
+          currentGenCount = limitData.generation_count ?? 0;
         }
       }
 
       // Check if free user has exceeded limit (10 generations/day)
-      if (!isPremium && currentCount >= 10) {
+      if (!isPremium && currentGenCount >= 10) {
         logEvent('generation_rate_limited', {
           request_id: requestId,
           user_type: 'free',
-          current_count: currentCount,
+          current_count: currentGenCount,
           limit: 10,
           duration_ms: Date.now() - startTime
         });
@@ -160,26 +173,8 @@ serve(async (req) => {
         );
       }
 
-      // Update generation count
-      const newCount = currentCount + 1;
-      if (limitData) {
-        await supabaseClient
-          .from('user_chat_limits')
-          .update({
-            message_count: newCount,
-            last_message_at: new Date().toISOString()
-          })
-          .eq('user_id', userId);
-      } else {
-        await supabaseClient
-          .from('user_chat_limits')
-          .insert({
-            user_id: userId,
-            message_count: 1,
-            last_message_at: new Date().toISOString(),
-            is_premium: false
-          });
-      }
+      // NOTE: generation_count is incremented AFTER a successful OpenAI
+      // response (see below) so that failed calls never consume a credit.
     }
 
     // Log request start (after determining user type)
@@ -289,16 +284,25 @@ Make them diverse - vary the silhouettes, textures, and key pieces.${colorFamily
       }
     };
 
-    // Add remaining generations count for logged-in users
-    if (userId) {
-      const { data: limitData } = await supabaseClient
-        .from('user_chat_limits')
-        .select('message_count, is_premium')
-        .eq('user_id', userId)
-        .single();
+    // Increment generation_count AFTER a successful response so that
+    // OpenAI failures or parse errors never consume a credit.
+    {
+      const newGenCount = currentGenCount + 1;
+      const now = new Date().toISOString();
 
-      if (limitData && !limitData.is_premium) {
-        result.generationsRemaining = Math.max(0, 10 - limitData.message_count);
+      // Upsert so that a missing row (e.g. pre-trigger signups) is created
+      // automatically and concurrent requests don't race on insert.
+      await supabaseClient
+        .from('user_chat_limits')
+        .upsert({
+          user_id: userId,
+          generation_count: newGenCount,
+          last_generation_at: now,
+          is_premium: isPremium
+        }, { onConflict: 'user_id' });
+
+      if (!isPremium) {
+        result.generationsRemaining = Math.max(0, 10 - newGenCount);
       }
     }
 
@@ -317,6 +321,8 @@ Make them diverse - vary the silhouettes, textures, and key pieces.${colorFamily
       }
     );
   } catch (error) {
+    if (error instanceof AuthError) return authErrorResponse(error);
+
     logEvent('generation_failed', {
       request_id: requestId,
       error_message: error.message || 'Unknown error',
