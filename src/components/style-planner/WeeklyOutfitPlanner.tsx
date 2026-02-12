@@ -46,7 +46,7 @@ const WeeklyOutfitPlanner = ({
   }, [outfitLogs, outfits, loading]);
 
   const loadWeeklyPlan = () => {
-    const plan: Record<string, { outfit?: Outfit; tip?: string }> = {};
+    const plan: Record<string, { outfit?: Outfit; tip?: string; deleted?: boolean }> = {};
     
     weekDays.forEach(({ date, dayName }) => {
       const dateStr = format(date, 'yyyy-MM-dd');
@@ -117,7 +117,7 @@ const WeeklyOutfitPlanner = ({
       // Get available outfits (shuffle for variety)
       const availableOutfits = [...outfits].sort(() => Math.random() - 0.5);
       const usedItemIds = new Set<string>();
-      const newPlan: Record<string, { outfit?: Outfit; tip?: string }> = {};
+      const newPlan: Record<string, { outfit?: Outfit; tip?: string; deleted?: boolean }> = {};
 
       // Try to assign unique outfits to each day
       for (let i = 0; i < weekDays.length; i++) {
