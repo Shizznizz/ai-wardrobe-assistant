@@ -39,7 +39,8 @@ const OutfitMatchModal = ({ open, onOpenChange, item, allItems }: OutfitMatchMod
         const { data, error } = await supabase
           .from('clothing_items')
           .select('*')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .is('deleted_at', null);
           
         if (error) throw error;
         

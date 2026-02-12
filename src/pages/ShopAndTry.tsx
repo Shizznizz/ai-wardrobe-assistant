@@ -162,7 +162,8 @@ const ShopAndTry = () => {
         occasion: 'casual',
         seasons: ['all'],
         favorite: false,
-        timesWorn: 0
+        timesWorn: 0,
+        dateAdded: new Date()
       });
       if (result) {
         toast.success("Look saved to your collection!");
@@ -229,9 +230,9 @@ const ShopAndTry = () => {
     try {
       const { error } = await supabase.from('wishlist').insert({
         user_id: user.id,
+        item_id: item.id || '',
         item_name: item.name || '',
-        // Use the product/affiliate URL when available, otherwise null
-        external_url: item.affiliateUrl || null,
+        external_url: (item as any).affiliateUrl || null,
         external_image_url: item.imageUrl || item.image || null
       });
       if (error) {
@@ -272,7 +273,8 @@ const ShopAndTry = () => {
         image: item.imageUrl || item.image,
         imageUrl: item.imageUrl || item.image,
         favorite: false,
-        timesWorn: 0
+        timesWorn: 0,
+        dateAdded: new Date()
       });
       if (result) {
         // Track mock ID → real DB ID so Save Look can reference it

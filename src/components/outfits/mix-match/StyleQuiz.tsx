@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import ActivityFeedbackPanel from './ActivityFeedbackPanel';
+import { useAuth } from '@/hooks/useAuth';
+import { getScopedItem, setScopedItem } from '@/utils/scopedStorage';
 
 interface StyleQuizProps {
   onComplete?: (answers: Record<string, string>) => void;
@@ -18,9 +20,9 @@ const StyleQuiz: React.FC<StyleQuizProps> = ({
   activityIcons = {},
   gradientButtonStyle = false,
 }) => {
+  const { user } = useAuth();
   const [selectedActivity, setSelectedActivity] = useState<string | null>(() => {
-    // Try to load previously selected activity from localStorage
-    const saved = localStorage.getItem('selectedActivity');
+    const saved = getScopedItem('selectedActivity', user?.id);
     return saved ? saved : null;
   });
   const [showFeedback, setShowFeedback] = useState(false);
@@ -36,8 +38,8 @@ const StyleQuiz: React.FC<StyleQuizProps> = ({
   const handleActivitySelect = (activity: string) => {
     setSelectedActivity(activity);
     
-    // Save selected activity to localStorage for persistence
-    localStorage.setItem('selectedActivity', activity);
+    // Save selected activity to user-scoped localStorage
+    setScopedItem('selectedActivity', activity, user?.id);
     
     // Show feedback panel
     setShowFeedback(true);

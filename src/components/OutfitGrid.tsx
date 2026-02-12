@@ -101,7 +101,7 @@ const OutfitGrid = ({
     }
     
     if (outfit) {
-      localStorage.setItem('previewOutfit', JSON.stringify(outfit));
+      localStorage.setItem(user?.id ? `previewOutfit:${user.id}` : 'previewOutfit', JSON.stringify(outfit));
       toast.success('Taking you to the Fitting Room to preview this look...');
       navigate('/fitting-room');
     }

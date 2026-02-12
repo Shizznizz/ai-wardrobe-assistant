@@ -131,6 +131,7 @@ export type Database = {
         Row: {
           color: string
           date_added: string | null
+          deleted_at: string | null
           favorite: boolean | null
           id: string
           image_url: string | null
@@ -146,6 +147,7 @@ export type Database = {
         Insert: {
           color: string
           date_added?: string | null
+          deleted_at?: string | null
           favorite?: boolean | null
           id?: string
           image_url?: string | null
@@ -161,6 +163,7 @@ export type Database = {
         Update: {
           color?: string
           date_added?: string | null
+          deleted_at?: string | null
           favorite?: boolean | null
           id?: string
           image_url?: string | null
@@ -475,6 +478,7 @@ export type Database = {
           colors: string[] | null
           created_at: string | null
           date_added: string | null
+          deleted_at: string | null
           favorite: boolean | null
           id: string
           items: string[]
@@ -494,6 +498,7 @@ export type Database = {
           colors?: string[] | null
           created_at?: string | null
           date_added?: string | null
+          deleted_at?: string | null
           favorite?: boolean | null
           id?: string
           items: string[]
@@ -513,6 +518,7 @@ export type Database = {
           colors?: string[] | null
           created_at?: string | null
           date_added?: string | null
+          deleted_at?: string | null
           favorite?: boolean | null
           id?: string
           items?: string[]
@@ -645,27 +651,39 @@ export type Database = {
       }
       user_chat_limits: {
         Row: {
+          chat_count: number
           created_at: string
+          generation_count: number
           id: string
           is_premium: boolean
+          last_chat_at: string | null
+          last_generation_at: string | null
           last_message_at: string
           message_count: number
           updated_at: string
           user_id: string
         }
         Insert: {
+          chat_count?: number
           created_at?: string
+          generation_count?: number
           id?: string
           is_premium?: boolean
+          last_chat_at?: string | null
+          last_generation_at?: string | null
           last_message_at?: string
           message_count?: number
           updated_at?: string
           user_id: string
         }
         Update: {
+          chat_count?: number
           created_at?: string
+          generation_count?: number
           id?: string
           is_premium?: boolean
+          last_chat_at?: string | null
+          last_generation_at?: string | null
           last_message_at?: string
           message_count?: number
           updated_at?: string
@@ -877,22 +895,31 @@ export type Database = {
       wishlist: {
         Row: {
           created_at: string
+          external_image_url: string | null
+          external_url: string | null
           id: string
           item_id: string
+          item_name: string | null
           notes: string | null
           user_id: string
         }
         Insert: {
           created_at?: string
+          external_image_url?: string | null
+          external_url?: string | null
           id?: string
-          item_id: string
+          item_id?: string
+          item_name?: string | null
           notes?: string | null
           user_id: string
         }
         Update: {
           created_at?: string
+          external_image_url?: string | null
+          external_url?: string | null
           id?: string
           item_id?: string
+          item_name?: string | null
           notes?: string | null
           user_id?: string
         }

@@ -38,6 +38,7 @@ const OutfitItemReplacement = ({ item, onReplaceItem, category }: OutfitItemRepl
         .from('clothing_items')
         .select('*')
         .eq('user_id', user.id)
+        .is('deleted_at', null)
         .eq('type', itemCategory)
         .neq('id', item.id)
         .limit(6);

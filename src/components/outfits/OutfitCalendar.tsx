@@ -152,6 +152,7 @@ const OutfitCalendar = ({ outfits, clothingItems, onAddLog, location }: OutfitCa
         .from('outfits')
         .select('id')
         .eq('user_id', user.id)
+        .is('deleted_at', null)
         .limit(1);
 
       if (error) {

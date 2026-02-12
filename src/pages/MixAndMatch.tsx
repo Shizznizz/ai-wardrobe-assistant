@@ -31,12 +31,12 @@ interface SavedWeatherPrefs {
   savedAt: string;
 }
 
-function loadWeatherPreferences(): Partial<SavedWeatherPrefs> {
+function loadWeatherPreferences(userId?: string): Partial<SavedWeatherPrefs> {
   try {
-    const stored = localStorage.getItem(WEATHER_STORAGE_KEY);
+    const key = userId ? `${WEATHER_STORAGE_KEY}:${userId}` : WEATHER_STORAGE_KEY;
+    const stored = localStorage.getItem(key);
     if (stored) {
       const prefs = JSON.parse(stored) as SavedWeatherPrefs;
-      // Only use if saved within last 24 hours
       const savedAt = new Date(prefs.savedAt);
       const now = new Date();
       const hoursDiff = (now.getTime() - savedAt.getTime()) / (1000 * 60 * 60);
@@ -50,9 +50,10 @@ function loadWeatherPreferences(): Partial<SavedWeatherPrefs> {
   return {};
 }
 
-function saveWeatherPreferences(prefs: Omit<SavedWeatherPrefs, 'savedAt'>) {
+function saveWeatherPreferences(prefs: Omit<SavedWeatherPrefs, 'savedAt'>, userId?: string) {
   try {
-    localStorage.setItem(WEATHER_STORAGE_KEY, JSON.stringify({
+    const key = userId ? `${WEATHER_STORAGE_KEY}:${userId}` : WEATHER_STORAGE_KEY;
+    localStorage.setItem(key, JSON.stringify({
       ...prefs,
       savedAt: new Date().toISOString()
     }));
@@ -66,7 +67,7 @@ const MixAndMatch = () => {
   const { clothingItems, outfits, isLoadingItems, isLoadingOutfits, refreshOutfits } = useWardrobeData();
   
   // Load persisted weather preferences
-  const savedPrefs = loadWeatherPreferences();
+  const savedPrefs = loadWeatherPreferences(user?.id);
   
   const [currentOutfit, setCurrentOutfit] = useState<Outfit | null>(null);
   const [showRecommendation, setShowRecommendation] = useState(false);
@@ -87,7 +88,7 @@ const MixAndMatch = () => {
   
   // Persist weather preferences when they change
   useEffect(() => {
-    saveWeatherPreferences({ temperature, weatherCondition, situation });
+    saveWeatherPreferences({ temperature, weatherCondition, situation }, user?.id);
   }, [temperature, weatherCondition, situation]);
   
   // Scroll to top on page load
