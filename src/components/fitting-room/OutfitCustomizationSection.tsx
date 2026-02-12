@@ -35,7 +35,8 @@ const OutfitCustomizationSection = ({
           const { data, error } = await supabase
             .from('clothing_items')
             .select('*')
-            .eq('user_id', user.id);
+            .eq('user_id', user.id)
+            .is('deleted_at', null);
           
           if (error) {
             console.error('Error fetching clothing items:', error);

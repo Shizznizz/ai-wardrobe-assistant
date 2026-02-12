@@ -169,7 +169,8 @@ const OutfitTabSection = ({
         const { error } = await supabase
           .from('outfits')
           .update({ deleted_at: new Date().toISOString() })
-          .eq('id', outfitToDelete);
+          .eq('id', outfitToDelete)
+          .eq('user_id', user.id);
           
         if (error) {
           console.error("Error deleting outfit from database:", error);

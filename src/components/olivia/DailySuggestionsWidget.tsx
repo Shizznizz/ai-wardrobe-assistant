@@ -48,6 +48,7 @@ const DailySuggestionsWidget = () => {
       const { data: outfitsData } = await supabase
         .from('outfits')
         .select('*')
+        .is('deleted_at', null)
         .in('id', data.outfit_ids);
 
       setOutfits(outfitsData || []);

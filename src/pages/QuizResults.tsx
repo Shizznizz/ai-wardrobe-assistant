@@ -41,7 +41,8 @@ I'm now using these insights to personalize every outfit recommendation, wardrob
 
   // Check rate limit
   const checkRateLimit = useCallback(() => {
-    const lastRefresh = localStorage.getItem(RATE_LIMIT_KEY);
+    const key = user?.id ? `${RATE_LIMIT_KEY}:${user.id}` : RATE_LIMIT_KEY;
+    const lastRefresh = localStorage.getItem(key);
     if (!lastRefresh) return true;
     
     const timeSince = Date.now() - parseInt(lastRefresh, 10);

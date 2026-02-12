@@ -113,6 +113,7 @@ export class SmartRemindersService {
       .from('clothing_items')
       .select('*')
       .eq('user_id', user.id)
+      .is('deleted_at', null)
       .or(`last_worn.is.null,last_worn.lt.${thirtyDaysAgo.toISOString()}`)
       .limit(5);
 

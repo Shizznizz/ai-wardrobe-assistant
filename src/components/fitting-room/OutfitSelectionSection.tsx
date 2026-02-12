@@ -43,7 +43,8 @@ const OutfitSelectionSection = ({
           const { data: clothingData, error: clothingError } = await supabase
             .from('clothing_items')
             .select('*')
-            .eq('user_id', user.id);
+            .eq('user_id', user.id)
+            .is('deleted_at', null);
           
           if (clothingError) {
             console.error('Error fetching clothing items:', clothingError);
@@ -72,7 +73,8 @@ const OutfitSelectionSection = ({
           const { data, error } = await supabase
             .from('outfits')
             .select('*')
-            .eq('user_id', user.id);
+            .eq('user_id', user.id)
+            .is('deleted_at', null);
           
           if (error) {
             console.error('Error fetching outfits:', error);
